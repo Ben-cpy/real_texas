@@ -1,0 +1,131 @@
+{
+  "handRankings": [
+    {
+      "rank": 1,
+      "name": "皇家同花顺",
+      "englishName": "Royal Flush",
+      "example": "♠A ♠K ♠Q ♠J ♠10",
+      "description": "同一花色的A-K-Q-J-10",
+      "probability": "0.000154%",
+      "color": "#ffd700",
+      "strength": "最强"
+    },
+    {
+      "rank": 2,
+      "name": "同花顺",
+      "englishName": "Straight Flush", 
+      "example": "♥9 ♥8 ♥7 ♥6 ♥5",
+      "description": "同一花色的连续5张牌",
+      "probability": "0.00139%",
+      "color": "#c0c0c0",
+      "strength": "很强"
+    },
+    {
+      "rank": 3,
+      "name": "四条",
+      "englishName": "Four of a Kind",
+      "example": "♠K ♥K ♦K ♣K ♠3", 
+      "description": "4张相同点数的牌",
+      "probability": "0.0240%",
+      "color": "#cd853f",
+      "strength": "很强"
+    },
+    {
+      "rank": 4,
+      "name": "葫芦",
+      "englishName": "Full House",
+      "example": "♠A ♥A ♦A ♠8 ♥8",
+      "description": "三条 + 一对",
+      "probability": "0.1441%",
+      "color": "#4682b4", 
+      "strength": "强"
+    },
+    {
+      "rank": 5,
+      "name": "同花",
+      "englishName": "Flush",
+      "example": "♠K ♠10 ♠7 ♠4 ♠2",
+      "description": "5张同一花色的牌（不连续）",
+      "probability": "0.1965%",
+      "color": "#228b22",
+      "strength": "强"
+    },
+    {
+      "rank": 6,
+      "name": "顺子",
+      "englishName": "Straight", 
+      "example": "♠A ♥K ♦Q ♣J ♠10",
+      "description": "连续5张牌（不同花色）",
+      "probability": "0.3925%",
+      "color": "#dc143c",
+      "strength": "中等"
+    },
+    {
+      "rank": 7,
+      "name": "三条",
+      "englishName": "Three of a Kind",
+      "example": "♠Q ♥Q ♦Q ♠7 ♥4",
+      "description": "3张相同点数的牌",
+      "probability": "2.1128%",
+      "color": "#9370db",
+      "strength": "中等"
+    },
+    {
+      "rank": 8,
+      "name": "两对",
+      "englishName": "Two Pairs",
+      "example": "♠J ♥J ♦8 ♣8 ♠5",
+      "description": "两个不同的对子", 
+      "probability": "4.7539%",
+      "color": "#ff8c00",
+      "strength": "一般"
+    },
+    {
+      "rank": 9,
+      "name": "一对",
+      "englishName": "One Pair",
+      "example": "♠10 ♥10 ♦6 ♣4 ♠2",
+      "description": "2张相同点数的牌",
+      "probability": "42.2569%",
+      "color": "#20b2aa", 
+      "strength": "一般"
+    },
+    {
+      "rank": 10,
+      "name": "高牌",
+      "englishName": "High Card",
+      "example": "♠A ♥9 ♦7 ♣5 ♠3",
+      "description": "没有任何组合，比较最大的牌",
+      "probability": "50.1177%",
+      "color": "#696969",
+      "strength": "最弱"
+    }
+  ],
+  "cardValues": {
+    "A": 14,
+    "K": 13, 
+    "Q": 12,
+    "J": 11,
+    "10": 10,
+    "9": 9,
+    "8": 8,
+    "7": 7,
+    "6": 6,
+    "5": 5,
+    "4": 4,
+    "3": 3,
+    "2": 2
+  },
+  "suits": {
+    "♠": "黑桃",
+    "♥": "红心", 
+    "♦": "方块",
+    "♣": "梅花"
+  },
+  "tips": [
+    "相同牌型按点数大小比较，A最大，2最小",
+    "同花顺中A-2-3-4-5是最小的顺子",
+    "葫芦比较时先比三条，再比对子",
+    "两对比较时先比大对子，再比小对子，最后比单牌"
+  ]
+}

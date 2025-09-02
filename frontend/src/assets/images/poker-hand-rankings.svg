@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1200">
+  <defs>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f0f0f0;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2c5282;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a365d;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="1200" fill="#0f1419"/>
+  
+  <!-- Header -->
+  <rect x="0" y="0" width="800" height="80" fill="url(#headerGrad)"/>
+  <text x="400" y="50" text-anchor="middle" fill="white" font-family="Arial" font-size="32" font-weight="bold">德州扑克牌力排序</text>
+  
+  <!-- Rank 1: Royal Flush -->
+  <g transform="translate(50, 100)">
+    <rect x="0" y="0" width="700" height="80" rx="10" fill="url(#cardGrad)" stroke="#ffd700" stroke-width="3"/>
+    <text x="20" y="35" fill="#1a365d" font-family="Arial" font-size="24" font-weight="bold">1. 皇家同花顺 Royal Flush</text>
+    <text x="20" y="60" fill="#666" font-family="Arial" font-size="16">♠A ♠K ♠Q ♠J ♠10 (同花色最大5张连牌)</text>
+    <rect x="600" y="10" width="80" height="60" rx="8" fill="#ffd700" opacity="0.3"/>
+    <text x="640" y="45" text-anchor="middle" fill="#b8860b" font-family="Arial" font-size="20" font-weight="bold">最强</text>
+  </g>
+  
+  <!-- Rank 2: Straight Flush -->
+  <g transform="translate(50, 200)">
+    <rect x="0" y="0" width="700" height="80" rx="10" fill="url(#cardGrad)" stroke="#c0c0c0" stroke-width="2"/>
+    <text x="20" y="35" fill="#1a365d" font-family="Arial" font-size="24" font-weight="bold">2. 同花顺 Straight Flush</text>
+    <text x="20" y="60" fill="#666" font-family="Arial" font-size="16">♥9 ♥8 ♥7 ♥6 ♥5 (同花色连续5张)</text>
+  </g>
+  
+  <!-- Rank 3: Four of a Kind -->
+  <g transform="translate(50, 300)">
+    <rect x="0" y="0" width="700" height="80" rx="10" fill="url(#cardGrad)" stroke="#cd853f" stroke-width="2"/>
+    <text x="20" y="35" fill="#1a365d" font-family="Arial" font-size="24" font-weight="bold">3. 四条 Four of a Kind</text>
+    <text x="20" y="60" fill="#666" font-family="Arial" font-size="16">♠K ♥K ♦K ♣K ♠3 (4张相同点数)</text>
+  </g>
+  
+  <!-- Rank 4: Full House -->
+  <g transform="translate(50, 400)">
+    <rect x="0" y="0" width="700" height="80" rx="10" fill="url(#cardGrad)" stroke="#4682b4" stroke-width="2"/>
+    <text x="20" y="35" fill="#1a365d" font-family="Arial" font-size="24" font-weight="bold">4. 葫芦 Full House</text>
+    <text x="20" y="60" fill="#666" font-family="Arial" font-size="16">♠A ♥A ♦A ♠8 ♥8 (三条 + 一对)</text>
+  </g>
+  
+  <!-- Rank 5: Flush -->
+  <g transform="translate(50, 500)">
+    <rect x="0" y="0" width="700" height="80" rx="10" fill="url(#cardGrad)" stroke="#228b22" stroke-width="2"/>
+    <text x="20" y="35" fill="#1a365d" font-family="Arial" font-size="24" font-weight="bold">5. 同花 Flush</text>
+    <text x="20" y="60" fill="#666" font-family="Arial" font-size="16">♠K ♠10 ♠7 ♠4 ♠2 (同花色任意5张)</text>
+  </g>
+  
+  <!-- Rank 6: Straight -->
+  <g transform="translate(50, 600)">
+    <rect x="0" y="0" width="700" height="80" rx="10" fill="url(#cardGrad)" stroke="#dc143c" stroke-width="2"/>
+    <text x="20" y="35" fill="#1a365d" font-family="Arial" font-size="24" font-weight="bold">6. 顺子 Straight</text>
+    <text x="20" y="60" fill="#666" font-family="Arial" font-size="16">♠A ♥K ♦Q ♣J ♠10 (连续5张不同花)</text>
+  </g>
+  
+  <!-- Rank 7: Three of a Kind -->
+  <g transform="translate(50, 700)">
+    <rect x="0" y="0" width="700" height="80" rx="10" fill="url(#cardGrad)" stroke="#9370db" stroke-width="2"/>
+    <text x="20" y="35" fill="#1a365d" font-family="Arial" font-size="24" font-weight="bold">7. 三条 Three of a Kind</text>
+    <text x="20" y="60" fill="#666" font-family="Arial" font-size="16">♠Q ♥Q ♦Q ♠7 ♥4 (3张相同点数)</text>
+  </g>
+  
+  <!-- Rank 8: Two Pairs -->
+  <g transform="translate(50, 800)">
+    <rect x="0" y="0" width="700" height="80" rx="10" fill="url(#cardGrad)" stroke="#ff8c00" stroke-width="2"/>
+    <text x="20" y="35" fill="#1a365d" font-family="Arial" font-size="24" font-weight="bold">8. 两对 Two Pairs</text>
+    <text x="20" y="60" fill="#666" font-family="Arial" font-size="16">♠J ♥J ♦8 ♣8 ♠5 (两个不同对子)</text>
+  </g>
+  
+  <!-- Rank 9: One Pair -->
+  <g transform="translate(50, 900)">
+    <rect x="0" y="0" width="700" height="80" rx="10" fill="url(#cardGrad)" stroke="#20b2aa" stroke-width="2"/>
+    <text x="20" y="35" fill="#1a365d" font-family="Arial" font-size="24" font-weight="bold">9. 一对 One Pair</text>
+    <text x="20" y="60" fill="#666" font-family="Arial" font-size="16">♠10 ♥10 ♦6 ♣4 ♠2 (2张相同点数)</text>
+  </g>
+  
+  <!-- Rank 10: High Card -->
+  <g transform="translate(50, 1000)">
+    <rect x="0" y="0" width="700" height="80" rx="10" fill="url(#cardGrad)" stroke="#696969" stroke-width="2"/>
+    <text x="20" y="35" fill="#1a365d" font-family="Arial" font-size="24" font-weight="bold">10. 高牌 High Card</text>
+    <text x="20" y="60" fill="#666" font-family="Arial" font-size="16">♠A ♥9 ♦7 ♣5 ♠3 (没有任何组合)</text>
+    <rect x="600" y="10" width="80" height="60" rx="8" fill="#696969" opacity="0.3"/>
+    <text x="640" y="45" text-anchor="middle" fill="#2f4f4f" font-family="Arial" font-size="20" font-weight="bold">最弱</text>
+  </g>
+  
+  <!-- Footer -->
+  <rect x="0" y="1120" width="800" height="80" fill="url(#headerGrad)"/>
+  <text x="400" y="1150" text-anchor="middle" fill="white" font-family="Arial" font-size="18" font-weight="bold">牌力从上到下递减</text>
+  <text x="400" y="1170" text-anchor="middle" fill="#cbd5e0" font-family="Arial" font-size="14">相同牌型按点数大小比较，A最大，2最小</text>
+</svg>
