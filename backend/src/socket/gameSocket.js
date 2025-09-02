@@ -80,6 +80,12 @@ export const handleSocketConnection = (socket, io) => {
         return
       }
 
+      // 如果是第一个玩家，自动添加AI玩家便于测试
+      if (game.getPlayerCount() === 1) {
+        game.addAIPlayer()
+        console.log(`自动添加AI玩家到房间 ${roomId}`)
+      }
+
       // 加入Socket房间
       socket.join(roomId)
       socket.currentRoomId = roomId
@@ -137,6 +143,13 @@ export const handleSocketConnection = (socket, io) => {
 
         // 更新数据库中的游戏状态
         await GameRoom.updateGameState(socket.currentRoomId, game.getGameState())
+
+        // 处理AI行动（延迟1秒让用户看到过程）
+        console.log('准备处理AI行动...')
+        setTimeout(async () => {
+          console.log('开始处理AI行动')
+          await processAIActions(game, socket.currentRoomId, io)
+        }, 1000)
 
         // 检查游戏是否结束
         if (game.isGameFinished()) {
@@ -235,20 +248,74 @@ const handleLeaveRoom = async (socket, io) => {
   console.log(`玩家 ${socket.username} 离开房间 ${roomId}`)
 }
 
+// 处理AI连续行动
+const processAIActions = async (game, roomId, io) => {
+  try {
+    let maxAIActions = 10 // 防止无限循环
+    let aiActionCount = 0
+    
+    while (aiActionCount < maxAIActions) {
+      const aiResult = game.processAIAction()
+      
+      if (!aiResult) {
+        // 没有AI需要行动，或者游戏结束
+        break
+      }
+      
+      aiActionCount++
+      
+      // 广播AI行动
+      io.to(roomId).emit('ai_action', {
+        playerId: aiResult.playerId,
+        playerName: aiResult.playerName,
+        action: aiResult.action,
+        amount: aiResult.amount
+      })
+      
+      // 广播游戏状态更新
+      io.to(roomId).emit('game_update', {
+        gameState: aiResult.gameState,
+        lastAction: {
+          type: aiResult.action,
+          player: aiResult.playerName,
+          amount: aiResult.amount
+        }
+      })
+      
+      // 更新数据库中的游戏状态
+      await GameRoom.updateGameState(roomId, aiResult.gameState)
+      
+      // AI行动间隔
+      await new Promise(resolve => setTimeout(resolve, 800))
+      
+      // 检查游戏是否结束
+      if (game.isGameFinished()) {
+        await handleGameFinish(game, roomId, io)
+        break
+      }
+    }
+    
+  } catch (error) {
+    console.error('AI行动处理错误:', error)
+  }
+}
+
 // 处理游戏结束
 const handleGameFinish = async (game, roomId, io) => {
   try {
     const results = game.getGameResults()
     
-    // 更新玩家筹码和统计数据
+    // 更新玩家筹码和统计数据 (只更新真实玩家，跳过AI)
     for (const player of results.players) {
-      await User.updateChips(player.id, player.finalChips)
-      await User.updateGameStats(player.id, {
-        gamesPlayed: 1,
-        gamesWon: player.id === results.winner.id ? 1 : 0,
-        chipsWon: Math.max(0, player.chipsChange),
-        chipsLost: Math.max(0, -player.chipsChange)
-      })
+      if (!player.isAI) {
+        await User.updateChips(player.id, player.finalChips)
+        await User.updateGameStats(player.id, {
+          gamesPlayed: 1,
+          gamesWon: player.id === results.winner.id ? 1 : 0,
+          chipsWon: Math.max(0, player.chipsChange),
+          chipsLost: Math.max(0, -player.chipsChange)
+        })
+      }
     }
 
     // 更新房间状态

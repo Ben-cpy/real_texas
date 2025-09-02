@@ -98,10 +98,44 @@ export class PokerGame {
       totalBet: 0,
       folded: false,
       allIn: false,
-      active: true
+      active: true,
+      isAI: player.isAI || false
     })
 
     return true
+  }
+
+  // 添加AI玩家
+  addAIPlayer() {
+    const aiId = `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const aiPlayer = {
+      id: aiId,
+      name: `AI玩家${this.players.length + 1}`,
+      chips: 1000,
+      socketId: null,
+      isAI: true
+    }
+    return this.addPlayer(aiPlayer)
+  }
+
+  // 获取玩家数量
+  getPlayerCount() {
+    return this.players.length
+  }
+
+  // 获取活跃玩家列表
+  getPlayers() {
+    return this.players.map(player => ({
+      id: player.id,
+      name: player.name,
+      chips: player.chips,
+      isAI: player.isAI || false,
+      active: player.active,
+      folded: player.folded,
+      allIn: player.allIn,
+      currentBet: player.currentBet,
+      totalBet: player.totalBet
+    }))
   }
 
   // 移除玩家
@@ -249,6 +283,62 @@ export class PokerGame {
     }
 
     return actionResult
+  }
+
+  // 简单AI策略
+  getAIAction(player) {
+    const callAmount = this.currentBet - player.currentBet
+    const random = Math.random()
+    
+    // 如果没钱了，只能弃牌或全押
+    if (player.chips <= callAmount) {
+      return random < 0.4 ? { action: 'fold' } : { action: 'all_in' }
+    }
+    
+    // 如果不需要跟注（可以过牌）
+    if (callAmount === 0) {
+      if (random < 0.8) return { action: 'check' }
+      return { action: 'bet', amount: this.bigBlind }
+    }
+    
+    // 需要跟注的情况
+    if (random < 0.3) return { action: 'fold' }      // 30% 弃牌
+    if (random < 0.9) return { action: 'call' }      // 60% 跟注  
+    return { action: 'call' }                        // 10% 跟注（简化逻辑）
+  }
+
+  // 处理AI行动
+  processAIAction() {
+    if (this.currentPlayerIndex === -1 || this.gameFinished) {
+      return null
+    }
+    
+    const currentPlayer = this.players[this.currentPlayerIndex]
+    if (!currentPlayer || !currentPlayer.isAI || currentPlayer.folded || !currentPlayer.active) {
+      return null
+    }
+    
+    console.log(`AI ${currentPlayer.name} 开始行动，当前下注: ${this.currentBet}, 玩家下注: ${currentPlayer.currentBet}`)
+    
+    const aiDecision = this.getAIAction(currentPlayer)
+    console.log(`AI决策: ${aiDecision.action}, 金额: ${aiDecision.amount || 0}`)
+    
+    const result = this.handlePlayerAction(currentPlayer.id, aiDecision.action, aiDecision.amount)
+    
+    if (result.success) {
+      console.log(`AI行动成功: ${aiDecision.action}`)
+      return {
+        playerId: currentPlayer.id,
+        playerName: currentPlayer.name,
+        action: aiDecision.action,
+        amount: result.amount || aiDecision.amount || 0,
+        gameState: this.getGameState()
+      }
+    } else {
+      console.log(`AI行动失败: ${result.error}`)
+    }
+    
+    return null
   }
 
   // 弃牌

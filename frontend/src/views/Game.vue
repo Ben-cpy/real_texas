@@ -27,7 +27,9 @@
               class="card"
               :class="{ 'revealed': card.revealed }"
             >
-              <span v-if="card.revealed">{{ card.suit }}{{ card.rank }}</span>
+              <span v-if="card.revealed" :class="getCardColor(card.suit)">
+                {{ card.suit }}{{ card.rank }}
+              </span>
               <span v-else>🂠</span>
             </div>
           </div>
@@ -58,7 +60,7 @@
                 class="card small"
                 :class="{ 'face-up': player.id === userId }"
               >
-                <span v-if="player.id === userId">{{ card.suit }}{{ card.rank }}</span>
+                <span v-if="player.id === userId" :class="getCardColor(card.suit)">{{ card.suit }}{{ card.rank }}</span>
                 <span v-else>🂠</span>
               </div>
             </div>
@@ -259,6 +261,15 @@ const addLog = (message) => {
 
 const formatTime = (time) => {
   return time.toLocaleTimeString()
+}
+
+const getCardColor = (suit) => {
+  // 红桃和方块用红色，黑桃和梅花用黑色
+  if (suit === '♥' || suit === '♦') {
+    return 'red-suit'
+  } else {
+    return 'black-suit'
+  }
 }
 
 const leaveGame = () => {
@@ -496,6 +507,15 @@ onUnmounted(() => {
 
 .log-message {
   color: #fff;
+}
+
+/* 扑克牌花色颜色 */
+.red-suit {
+  color: #dc3545 !important; /* 红色 - 红桃♥和方块♦ */
+}
+
+.black-suit {
+  color: #000 !important; /* 黑色 - 黑桃♠和梅花♣ */
 }
 
 :deep(.el-slider) {
