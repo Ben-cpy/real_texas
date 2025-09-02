@@ -48,11 +48,25 @@ export const handleSocketConnection = (socket, io) => {
       }
 
       const { roomId } = data
-      const room = await GameRoom.findById(roomId)
+      let room = await GameRoom.findById(roomId)
       
       if (!room) {
-        socket.emit('error', { error: '房间不存在' })
-        return
+        // 如果房间不存在，创建默认房间
+        try {
+          room = await GameRoom.create({
+            id: roomId,
+            name: '默认游戏房间',
+            creatorId: socket.userId,
+            maxPlayers: 6,
+            smallBlind: 10,
+            bigBlind: 20
+          })
+          console.log(`创建默认房间: ${roomId}`)
+        } catch (createError) {
+          console.error('创建房间失败:', createError)
+          socket.emit('error', { error: '无法创建房间' })
+          return
+        }
       }
 
       // 获取或创建游戏实例
@@ -80,6 +94,14 @@ export const handleSocketConnection = (socket, io) => {
         return
       }
 
+      // 检查是否需要更新房主（如果当前玩家是唯一的真实玩家）
+      const realPlayers = game.getPlayers().filter(p => !p.isAI)
+      if (realPlayers.length === 1 && realPlayers[0].id === user.id) {
+        // 更新房间的创建者为当前玩家
+        await GameRoom.updateCreator(roomId, user.id)
+        console.log(`更新房间 ${roomId} 的房主为: ${user.username}`)
+      }
+
       // 如果是第一个玩家，自动添加AI玩家便于测试
       if (game.getPlayerCount() === 1) {
         game.addAIPlayer()
@@ -93,6 +115,9 @@ export const handleSocketConnection = (socket, io) => {
       // 更新数据库中的房间玩家信息
       await GameRoom.updatePlayers(roomId, game.getPlayers())
 
+      // 获取最新的房间信息（包含更新后的创建者）
+      const updatedRoom = await GameRoom.findById(roomId)
+
       // 通知房间内所有玩家
       io.to(roomId).emit('player_joined', {
         player: {
@@ -101,7 +126,8 @@ export const handleSocketConnection = (socket, io) => {
           chips: user.chips
         },
         players: game.getPlayers(),
-        gameState: game.getGameState()
+        gameState: game.getGameState(),
+        roomCreatorId: updatedRoom.creator_id
       })
 
       console.log(`玩家 ${user.username} 加入房间 ${roomId}`)
@@ -203,6 +229,58 @@ export const handleSocketConnection = (socket, io) => {
     } catch (error) {
       console.error('开始游戏错误:', error)
       socket.emit('error', { error: '开始游戏失败' })
+    }
+  })
+
+  // 重开游戏
+  socket.on('reset_game', async () => {
+    try {
+      if (!socket.userId || !socket.currentRoomId) {
+        socket.emit('error', { error: '无效的游戏状态' })
+        return
+      }
+
+      const game = activeRooms.get(socket.currentRoomId)
+      if (!game) {
+        socket.emit('error', { error: '游戏不存在' })
+        return
+      }
+
+      // 重置游戏状态
+      game.gameStarted = false
+      game.gameFinished = false
+      game.phase = 'waiting'
+      game.pot = 0
+      game.currentBet = 0
+      game.currentPlayerIndex = 0
+      game.communityCards = []
+      game.actionHistory = []
+      
+      // 重置玩家状态
+      game.players.forEach(player => {
+        player.cards = []
+        player.currentBet = 0
+        player.totalBet = 0
+        player.folded = false
+        player.allIn = false
+        player.active = player.chips > 0
+      })
+
+      // 更新房间状态
+      await GameRoom.updateStatus(socket.currentRoomId, 'waiting')
+      await GameRoom.updateGameState(socket.currentRoomId, game.getGameState())
+
+      // 广播游戏重开
+      io.to(socket.currentRoomId).emit('game_reset', {
+        gameState: game.getGameState(),
+        message: '游戏已重开'
+      })
+
+      console.log(`游戏重开: 房间 ${socket.currentRoomId}`)
+
+    } catch (error) {
+      console.error('重开游戏错误:', error)
+      socket.emit('error', { error: '重开游戏失败' })
     }
   })
 

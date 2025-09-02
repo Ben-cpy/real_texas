@@ -68,6 +68,16 @@ export class GameRoom {
     return await this.findById(id)
   }
 
+  static async updateCreator(id, creatorId) {
+    const sql = `
+      UPDATE game_rooms 
+      SET creator_id = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `
+    await database.run(sql, [creatorId, id])
+    return await this.findById(id)
+  }
+
   static async deleteById(id) {
     const sql = 'DELETE FROM game_rooms WHERE id = ?'
     return await database.run(sql, [id])
