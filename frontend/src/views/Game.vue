@@ -1,240 +1,257 @@
 <template>
   <div class="game">
-    <div class="game-header">
+    <!-- Game Header -->
+    <header class="game-header">
       <div class="game-info">
-        <h3>德州扑克游戏</h3>
-        <p>房间号: {{ roomId }} | 底注: {{ blinds.small }}/{{ blinds.big }}</p>
+        <h1 class="game-title">德州扑克</h1>
+        <div class="room-details">
+          <span class="room-id">房间: {{ roomId }}</span>
+          <span class="blinds">底注: ${{ blinds.small }}/${{ blinds.big }}</span>
+        </div>
       </div>
-      <div class="user-info">
-        <span>{{ username }}</span>
-        <el-button 
-          v-if="!gameState.gameStarted && isRoomCreator" 
-          type="success" 
-          @click="startGame"
-          :disabled="players.length < 2"
-        >
-          开始游戏 ({{ players.length }}/6)
-        </el-button>
-        <span v-if="!gameState.gameStarted && !isRoomCreator" class="room-status">
-          等待房主开始游戏...
-        </span>
-        <el-button type="warning" @click="resetGame">重开游戏</el-button>
-        <el-button type="primary" @click="leaveGame">离开游戏</el-button>
+      <div class="user-controls">
+        <div class="user-identity">
+          <span class="username">{{ username }}</span>
+          <span v-if="isRoomCreator" class="user-role">房主</span>
+        </div>
+        <div class="control-buttons">
+          <button 
+            v-if="!gameState.gameStarted && isRoomCreator" 
+            class="btn btn-success"
+            @click="startGame"
+            :disabled="players.length < 2"
+          >
+            开始游戏 ({{ players.length }}/6)
+          </button>
+          <span v-if="!gameState.gameStarted && !isRoomCreator" class="waiting-status">
+            等待房主开始...
+          </span>
+          <button class="btn btn-warning" @click="resetGame">重开</button>
+          <button class="btn btn-danger" @click="leaveGame">离开</button>
+        </div>
       </div>
-    </div>
+    </header>
     
-    <div class="game-table">
-      <!-- 牌桌 -->
-      <div class="poker-table">
-        <!-- 公共牌区域 -->
-        <div class="community-cards">
-          <div class="pot-info">
-            <div class="pot-amount">奖池: ${{ pot }}</div>
-            <div class="current-bet" v-if="currentBet > 0">当前下注: ${{ currentBet }}</div>
+    <!-- Main Game Area -->
+    <main class="game-main">
+      <!-- Poker Table Container -->
+      <section class="table-container">
+        <div class="poker-table" ref="pokerTableRef">
+          <!-- Community Cards Area -->
+          <div class="community-area">
+            <div class="pot-display">
+              <div class="pot-amount">奖池 ${{ pot }}</div>
+              <div class="current-bet" v-if="currentBet > 0">下注 ${{ currentBet }}</div>
+            </div>
+            <div class="community-cards">
+              <div
+                v-for="(card, index) in communityCards"
+                :key="`community-${index}`"
+                class="game-card"
+                :class="{ 
+                  'revealed': card.revealed,
+                  'card-back': !card.revealed
+                }"
+              >
+                <span v-if="card.revealed" :class="getCardColor(card.suit)">
+                  {{ card.suit }}{{ card.rank }}
+                </span>
+              </div>
+            </div>
           </div>
-          <div class="cards">
+          
+          <!-- Players Around Table -->
+          <div class="players-container">
             <div
-              v-for="(card, index) in communityCards"
-              :key="index"
-              class="card"
-              :class="{ 
-                'revealed': card.revealed,
-                'card-back': !card.revealed
+              v-for="(player, index) in players"
+              :key="player.id"
+              class="player-seat"
+              :class="{
+                'active-player': player.id === currentPlayer,
+                'folded-player': player.folded,
+                'all-in-player': player.allIn,
+                'current-user': player.id === userId
               }"
+              :style="getPlayerPosition(index)"
             >
-              <span v-if="card.revealed" :class="getCardColor(card.suit)">
-                {{ card.suit }}{{ card.rank }}
-              </span>
+              <!-- Player Avatar -->
+              <div class="player-avatar">
+                <div class="avatar-image">
+                  <span class="avatar-initial">{{ player.name.charAt(0).toUpperCase() }}</span>
+                </div>
+                <div class="countdown-timer" v-if="player.id === currentPlayer">
+                  <svg class="timer-svg" viewBox="0 0 36 36">
+                    <circle class="timer-bg" cx="18" cy="18" r="16"/>
+                    <circle class="timer-progress" cx="18" cy="18" r="16"/>
+                  </svg>
+                </div>
+              </div>
+              
+              <!-- Player Info -->
+              <div class="player-details">
+                <div class="player-name">{{ player.name }}</div>
+                <div class="player-chips">${{ player.chips }}</div>
+                <div class="player-action" v-if="player.lastAction">
+                  {{ getActionText(player.lastAction) }}
+                </div>
+                <div class="player-bet" v-if="player.currentBet > 0">
+                  ${{ player.currentBet }}
+                </div>
+              </div>
+              
+              <!-- Player Cards -->
+              <div class="player-cards" v-if="player.cards.length > 0">
+                <div
+                  v-for="(card, cardIndex) in player.cards"
+                  :key="`${player.id}-card-${cardIndex}`"
+                  class="game-card player-card"
+                  :class="{ 
+                    'own-card': player.id === userId,
+                    'opponent-card': player.id !== userId,
+                    'card-back': player.id !== userId
+                  }"
+                >
+                  <span v-if="player.id === userId" :class="getCardColor(card.suit)">
+                    {{ card.suit }}{{ card.rank }}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        
-        <!-- 玩家位置 -->
-        <div class="players">
-          <div
-            v-for="(player, index) in players"
-            :key="player.id"
-            class="player-seat"
-            :class="{
-              'current-player': player.id === currentPlayer,
-              'folded': player.folded,
-              'all-in': player.allIn
-            }"
-            :style="getPlayerPosition(index)"
-          >
-            <!-- 圆形头像和倒计时 -->
-            <div class="player-avatar" :class="{ 'active': player.id === currentPlayer }">
-              <div class="avatar-circle">
-                <span class="avatar-text">{{ player.name.charAt(0).toUpperCase() }}</span>
+      </section>
+      
+      <!-- Side Panel -->
+      <aside class="side-panel">
+        <!-- Action Panel -->
+        <section class="action-panel" v-if="isMyTurn">
+          <h3 class="panel-title">您的回合</h3>
+          
+          <!-- Primary Actions -->
+          <div class="primary-actions">
+            <button class="action-btn fold-btn" @click="fold">
+              <span class="btn-label">FOLD</span>
+              <span class="btn-desc">弃牌</span>
+            </button>
+            
+            <button 
+              class="action-btn call-btn" 
+              @click="canCheck ? check() : call()"
+              :disabled="!canCheck && callAmount > currentPlayer?.chips"
+            >
+              <span class="btn-label">{{ canCheck ? 'CHECK' : 'CALL' }}</span>
+              <span class="btn-desc">
+                {{ canCheck ? '过牌' : `跟注 $${callAmount}` }}
+              </span>
+            </button>
+            
+            <button 
+              class="action-btn raise-btn" 
+              @click="bet"
+              :disabled="betAmount > currentPlayer?.chips"
+            >
+              <span class="btn-label">{{ gameState.currentBet > 0 ? 'RAISE' : 'BET' }}</span>
+              <span class="btn-desc">
+                {{ gameState.currentBet > 0 ? '加注' : '下注' }} ${{ betAmount }}
+              </span>
+            </button>
+          </div>
+          
+          <!-- Betting Slider -->
+          <div class="betting-controls">
+            <div class="slider-section">
+              <input 
+                type="range" 
+                v-model="betAmount" 
+                :min="minBet" 
+                :max="maxBet" 
+                :step="blinds.small"
+                class="bet-slider"
+              >
+              <div class="slider-labels">
+                <span class="min-label">${{ minBet }}</span>
+                <span class="current-label">${{ betAmount }}</span>
+                <span class="max-label">${{ maxBet }}</span>
               </div>
-              <div class="countdown-ring" v-if="player.id === currentPlayer">
-                <svg class="countdown-svg" viewBox="0 0 36 36">
-                  <path class="countdown-bg" 
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                  <path class="countdown-progress" 
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    stroke-dasharray="60, 100"/>
-                </svg>
+            </div>
+          </div>
+          
+          <!-- Quick Bet Options -->
+          <div class="quick-bets">
+            <button 
+              class="quick-bet-btn" 
+              @click="setBetAmount(Math.floor(gameState.pot * 0.5))"
+              :disabled="Math.floor(gameState.pot * 0.5) > currentPlayer?.chips"
+            >
+              <span class="bet-type">1/2 POT</span>
+              <span class="bet-amount">${{ Math.floor(gameState.pot * 0.5) }}</span>
+            </button>
+            
+            <button 
+              class="quick-bet-btn" 
+              @click="setBetAmount(Math.floor(gameState.pot * 0.67))"
+              :disabled="Math.floor(gameState.pot * 0.67) > currentPlayer?.chips"
+            >
+              <span class="bet-type">2/3 POT</span>
+              <span class="bet-amount">${{ Math.floor(gameState.pot * 0.67) }}</span>
+            </button>
+            
+            <button 
+              class="quick-bet-btn" 
+              @click="setBetAmount(gameState.pot)"
+              :disabled="gameState.pot > currentPlayer?.chips"
+            >
+              <span class="bet-type">POT</span>
+              <span class="bet-amount">${{ gameState.pot }}</span>
+            </button>
+            
+            <button class="quick-bet-btn all-in-btn" @click="allIn">
+              <span class="bet-type">ALL-IN</span>
+              <span class="bet-amount">${{ currentPlayer?.chips || 0 }}</span>
+            </button>
+          </div>
+        </section>
+        
+        <!-- Game Log -->
+        <section class="game-log">
+          <h3 class="panel-title">游戏记录</h3>
+          <div class="log-container">
+            <div class="debug-section">
+              <h4 class="debug-title">状态信息</h4>
+              <div class="debug-grid">
+                <div class="debug-item">
+                  <span class="debug-label">连接</span>
+                  <span class="debug-value">{{ socket ? '已连接' : '未连接' }}</span>
+                </div>
+                <div class="debug-item">
+                  <span class="debug-label">阶段</span>
+                  <span class="debug-value">{{ gameState.phase }}</span>
+                </div>
+                <div class="debug-item">
+                  <span class="debug-label">玩家</span>
+                  <span class="debug-value">{{ players.length }}/6</span>
+                </div>
+                <div class="debug-item">
+                  <span class="debug-label">底池</span>
+                  <span class="debug-value">${{ gameState.pot }}</span>
+                </div>
               </div>
             </div>
             
-            <!-- 玩家信息 -->
-            <div class="player-info">
-              <div class="player-name">{{ player.name }}</div>
-              <div class="player-chips">${{ player.chips }}</div>
-              
-              <!-- 最近动作标签 -->
-              <div class="action-tag" v-if="player.lastAction">
-                {{ getActionText(player.lastAction) }}
-              </div>
-              
-              <!-- 当前下注 -->
-              <div class="player-bet" v-if="player.currentBet > 0">${{ player.currentBet }}</div>
-            </div>
-            <div class="player-cards" v-if="player.cards.length > 0">
+            <div class="log-entries">
               <div
-                v-for="(card, cardIndex) in player.cards"
-                :key="cardIndex"
-                class="card"
-                :class="{ 
-                  'face-up': player.id === userId,
-                  'small': player.id !== userId,
-                  'card-back': player.id !== userId
-                }"
+                v-for="(log, index) in gameLog"
+                :key="`log-${index}`"
+                class="log-entry"
               >
-                <span v-if="player.id === userId" :class="getCardColor(card.suit)">{{ card.suit }}{{ card.rank }}</span>
+                <time class="log-time">{{ formatTime(log.time) }}</time>
+                <span class="log-message">{{ log.message }}</span>
               </div>
             </div>
           </div>
-        </div>
-      </div>
-      
-    </div>
-    
-    <!-- 右侧面板 -->
-    <div class="right-panel">
-      <!-- 操作面板 -->
-      <div class="action-panel" v-if="isMyTurn">
-        <!-- 主操作按钮 -->
-        <div class="action-buttons">
-          <!-- 左：弃牌 -->
-          <button class="action-btn fold-btn" @click="fold">
-            <span class="btn-text">FOLD</span>
-            <span class="btn-subtitle">弃牌</span>
-          </button>
-          
-          <!-- 中：过牌/跟注 -->
-          <button 
-            class="action-btn call-btn" 
-            @click="canCheck ? check() : call()"
-            :disabled="!canCheck && callAmount > currentPlayer?.chips"
-          >
-            <span class="btn-text">{{ canCheck ? 'CHECK' : 'CALL' }}</span>
-            <span class="btn-subtitle">
-              {{ canCheck ? '过牌' : `跟注 $${callAmount}` }}
-            </span>
-          </button>
-          
-          <!-- 右：下注/加注（主按钮） -->
-          <button 
-            class="action-btn raise-btn primary-btn" 
-            @click="bet"
-            :disabled="betAmount > currentPlayer?.chips"
-          >
-            <span class="btn-text">{{ gameState.currentBet > 0 ? 'RAISE' : 'BET' }}</span>
-            <span class="btn-subtitle">
-              {{ gameState.currentBet > 0 ? '加注' : '下注' }} ${{ betAmount }}
-            </span>
-          </button>
-        </div>
-        
-        <!-- 下注滑条 -->
-        <div class="betting-slider">
-          <div class="slider-container">
-            <input 
-              type="range" 
-              v-model="betAmount" 
-              :min="minBet" 
-              :max="maxBet" 
-              :step="blinds.small"
-              class="bet-slider"
-            >
-            <div class="slider-labels">
-              <span>${{ minBet }}</span>
-              <span>${{ betAmount }}</span>
-              <span>${{ maxBet }}</span>
-            </div>
-          </div>
-        </div>
-        
-        <!-- 快捷筹码按钮 -->
-        <div class="quick-chips">
-          <button 
-            class="chip-btn" 
-            @click="setBetAmount(Math.floor(gameState.pot * 0.5))"
-            :disabled="Math.floor(gameState.pot * 0.5) > currentPlayer?.chips"
-          >
-            <span class="chip-amount">1/2 POT</span>
-            <span class="chip-value">${{ Math.floor(gameState.pot * 0.5) }}</span>
-          </button>
-          
-          <button 
-            class="chip-btn" 
-            @click="setBetAmount(Math.floor(gameState.pot * 0.67))"
-            :disabled="Math.floor(gameState.pot * 0.67) > currentPlayer?.chips"
-          >
-            <span class="chip-amount">2/3 POT</span>
-            <span class="chip-value">${{ Math.floor(gameState.pot * 0.67) }}</span>
-          </button>
-          
-          <button 
-            class="chip-btn" 
-            @click="setBetAmount(gameState.pot)"
-            :disabled="gameState.pot > currentPlayer?.chips"
-          >
-            <span class="chip-amount">POT</span>
-            <span class="chip-value">${{ gameState.pot }}</span>
-          </button>
-          
-          <button 
-            class="chip-btn all-in-chip" 
-            @click="allIn"
-          >
-            <span class="chip-amount">ALL-IN</span>
-            <span class="chip-value">${{ currentPlayer?.chips || 0 }}</span>
-          </button>
-        </div>
-      </div>
-      
-      <!-- 游戏日志 -->
-      <div class="game-log">
-        <div class="log-header">
-          <h4>游戏日志</h4>
-        </div>
-        <div class="log-content">
-          <div class="debug-info">
-            <p><strong>游戏状态:</strong></p>
-            <p>连接状态: {{ socket ? '✓ 已连接' : '✗ 未连接' }}</p>
-            <p>用户身份: {{ userId || '未认证' }}</p>
-            <p>房间权限: {{ isRoomCreator ? '房主' : '普通玩家' }}</p>
-            <p>游戏阶段: {{ gameState.phase }}</p>
-            <p>游戏状态: {{ gameState.gameStarted ? '进行中' : '等待中' }}</p>
-            <p>玩家数量: {{ players.length }}/6</p>
-            <p>当前轮到: {{ gameState.currentPlayer || '无' }}</p>
-            <p>底池: ${{ gameState.pot }}</p>
-          </div>
-          <hr style="margin: 10px 0; border-color: #666;">
-          <div
-            v-for="(log, index) in gameLog"
-            :key="index"
-            class="log-item"
-          >
-            <span class="log-time">{{ formatTime(log.time) }}</span>
-            <span class="log-message">{{ log.message }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
+        </section>
+      </aside>
+    </main>
   </div>
 </template>
 
@@ -246,12 +263,16 @@ import { io } from 'socket.io-client'
 
 const router = useRouter()
 
+// 用户和房间状态
 const username = ref(localStorage.getItem('username') || 'Guest')
-const userId = ref('user1') // 当前用户ID
+const userId = ref('user1')
 const roomId = ref('ROOM001')
-const isRoomCreator = ref(false) // 标记是否为房主
-const roomStatus = ref('waiting') // 房间状态
+const isRoomCreator = ref(false)
+const roomStatus = ref('waiting')
 let socket = null
+
+// 响应式容器引用
+const pokerTableRef = ref(null)
 
 // 初始化为空状态，等待后端数据
 const gameState = reactive({
@@ -292,16 +313,32 @@ const isMyTurn = computed(() => gameState.currentPlayer === userId.value)
 const canCheck = computed(() => gameState.currentBet === 0)
 const callAmount = computed(() => gameState.currentBet)
 
+// 响应式玩家位置计算
 const getPlayerPosition = (index) => {
+  if (!pokerTableRef.value) {
+    // 默认位置，用于服务端渲染或初始渲染
+    return { transform: 'translate(0px, 0px)' }
+  }
+  
+  const container = pokerTableRef.value
+  const containerRect = container.getBoundingClientRect()
+  const containerWidth = containerRect.width || 600
+  const containerHeight = containerRect.height || 400
+  
   const totalPlayers = players.value.length
   const angle = (360 / totalPlayers) * index
-  const radiusX = 280  // 长椭圆的横向半径
-  const radiusY = 160  // 长椭圆的纵向半径
+  
+  // 根据容器大小动态计算半径
+  const radiusX = Math.min(containerWidth * 0.35, 280)
+  const radiusY = Math.min(containerHeight * 0.3, 160)
+  
   const x = Math.cos((angle * Math.PI) / 180) * radiusX
   const y = Math.sin((angle * Math.PI) / 180) * radiusY
   
   return {
-    transform: `translate(${x}px, ${y}px)`
+    transform: `translate(${x}px, ${y}px)`,
+    '--player-radius-x': `${radiusX}px`,
+    '--player-radius-y': `${radiusY}px`
   }
 }
 
@@ -621,6 +658,15 @@ const setBetAmount = (amount) => {
   betAmount.value = Math.max(minBet.value, Math.min(amount, maxBet.value))
 }
 
+// 窗口大小变化处理
+const handleResize = () => {
+  // 强制重新计算玩家位置
+  if (players.value.length > 0) {
+    // 触发响应式更新
+    players.value = [...players.value]
+  }
+}
+
 onMounted(() => {
   // 开发阶段：强制清空localStorage确保干净的开始
   if (import.meta.env.DEV) {
@@ -629,11 +675,17 @@ onMounted(() => {
     localStorage.removeItem('username')
   }
   
+  // 添加窗口大小变化监听
+  window.addEventListener('resize', handleResize)
+  
   initSocket()
   ElMessage.success('正在连接游戏服务器...')
 })
 
 onUnmounted(() => {
+  // 清理事件监听器
+  window.removeEventListener('resize', handleResize)
+  
   if (socket) {
     socket.emit('leave_room')
     socket.disconnect()
@@ -642,253 +694,264 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Import CSS Custom Properties */
 .game {
-  height: 100vh;
-  background: 
-    radial-gradient(ellipse at center, #0b3d2e 0%, #062e1a 70%),
-    linear-gradient(135deg, #062e1a 0%, #0b3d2e 25%, #083529 50%, #0b3d2e 75%, #062e1a 100%);
-  background-size: 100% 100%, 200% 200%;
-  background-attachment: fixed;
-  padding: 15px;
+  min-height: 100vh;
+  background: var(--color-background);
+  padding: var(--space-md);
   position: relative;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  color: #f8fafc;
+  color: var(--color-text-primary);
+  container-type: size;
+  overflow: hidden;
 }
 
+/* Ambient Background Effects */
 .game::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: 
-    radial-gradient(circle at 20% 30%, rgba(245, 158, 11, 0.08) 0%, transparent 50%),
-    radial-gradient(circle at 80% 70%, rgba(31, 41, 55, 0.15) 0%, transparent 50%),
-    radial-gradient(circle at 50% 50%, rgba(6, 46, 26, 0.1) 0%, transparent 70%);
+    radial-gradient(circle at 20% 30%, rgba(245, 158, 11, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(31, 41, 55, 0.12) 0%, transparent 50%);
   pointer-events: none;
+  z-index: 0;
 }
 
+/* Header Styles */
 .game-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  background: linear-gradient(135deg, #1f2937 0%, rgba(31, 41, 55, 0.95) 100%);
+  align-items: flex-start;
+  gap: var(--space-lg);
+  background: var(--color-surface);
   backdrop-filter: blur(20px);
-  border-radius: 12px;
-  padding: 12px 20px;
-  margin-bottom: 15px;
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  box-shadow: 
-    0 4px 16px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(245, 158, 11, 0.1);
+  border-radius: var(--border-radius-lg);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-md);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
   position: relative;
   z-index: 10;
   flex-shrink: 0;
 }
 
-.game-info h3 {
-  color: #f8fafc;
+.game-title {
+  color: var(--color-text-primary);
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--font-size-xl);
   font-weight: 700;
   letter-spacing: -0.025em;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  line-height: var(--line-height-tight);
 }
 
-.game-info p {
-  color: #f8fafc;
-  opacity: 0.8;
-  margin: 8px 0 0 0;
-  font-size: 0.95rem;
+.room-details {
+  display: flex;
+  gap: var(--space-md);
+  margin-top: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.room-id,
+.blinds {
   font-weight: 500;
 }
 
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.user-info span {
-  color: #f8fafc;
-  font-weight: 600;
-  font-size: 1rem;
-}
-
-.room-status {
-  color: #fbbf24;
-  font-style: italic;
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.game-table {
-  flex: 1;
-  display: flex;
-  gap: 15px;
-  min-height: 0;
-  position: relative;
-}
-
-.right-panel {
-  width: 280px;
+.user-controls {
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  flex-shrink: 0;
+  gap: var(--space-sm);
+  align-items: flex-end;
 }
 
-.poker-table {
-  position: relative;
+.user-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.username {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  font-size: var(--font-size-md);
+}
+
+.user-role {
+  background: var(--color-warning);
+  color: #1f2937;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+}
+
+.control-buttons {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.waiting-status {
+  color: var(--color-warning);
+  font-style: italic;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  padding: var(--space-xs) var(--space-sm);
+  align-self: center;
+}
+
+/* Main Game Layout */
+.game-main {
   flex: 1;
-  background: 
-    /* 噪声纹理层 */
-    url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><defs><filter id="noiseFilter"><feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="1" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.02 0"/></filter></defs><rect width="100%" height="100%" filter="url(%23noiseFilter)"/></svg>'),
-    /* 毡面渐变 */
-    radial-gradient(ellipse at center, #0b3d2e 0%, #083529 40%, #062e1a 80%),
-    radial-gradient(ellipse 160% 60% at 50% 50%, rgba(11, 61, 46, 0.3) 0%, transparent 70%);
-  border-radius: 50% / 30%;
-  border: 8px solid transparent;
-  background-clip: padding-box;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-lg);
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.table-container {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
-  max-height: 500px;
-  margin: 0;
+  min-height: 0;
+}
+
+.side-panel {
+  width: clamp(280px, 25vw, 320px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  flex-shrink: 0;
+}
+
+/* Poker Table Styles */
+.poker-table {
+  position: relative;
+  width: clamp(500px, 80vw, 800px);
+  height: clamp(350px, 60vh, 500px);
+  aspect-ratio: 8 / 5;
+  background: 
+    radial-gradient(ellipse at center, #0b3d2e 0%, #083529 40%, #062e1a 80%);
+  border-radius: 50% / 35%;
+  border: clamp(4px, 1vw, 8px) solid #1f2937;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   box-shadow: 
-    /* 桌沿阴影 */
-    0 0 0 3px #1f2937,
-    0 0 0 4px rgba(245, 158, 11, 0.4),
-    0 0 0 6px #1f2937,
-    /* 外部阴影 */
-    0 15px 40px rgba(0, 0, 0, 0.5),
-    /* 内部阴影 */
-    inset 0 0 30px rgba(0, 0, 0, 0.4),
-    inset 1px 1px 3px rgba(0, 0, 0, 0.3);
+    0 0 0 2px rgba(245, 158, 11, 0.3),
+    var(--shadow-lg),
+    inset 0 0 clamp(20px, 3vw, 40px) rgba(0, 0, 0, 0.4);
+  container-type: size;
 }
 
 .poker-table::before {
   content: '';
   position: absolute;
-  top: -8px;
-  left: -8px;
-  right: -8px;
-  bottom: -8px;
+  inset: calc(-1 * clamp(4px, 1vw, 8px));
   background: linear-gradient(135deg, 
-    /* 金属高光效果 */
     #1f2937 0%,
     #374151 15%,
-    #4b5563 30%,
     rgba(245, 158, 11, 0.3) 45%,
-    rgba(245, 158, 11, 0.6) 50%,
+    rgba(245, 158, 11, 0.5) 50%,
     rgba(245, 158, 11, 0.3) 55%,
-    #4b5563 70%,
     #374151 85%,
     #1f2937 100%
   );
-  border-radius: 50% / 30%;
+  border-radius: 50% / 35%;
   z-index: -1;
 }
 
 .poker-table::after {
   content: '';
   position: absolute;
-  top: 12px;
-  left: 18px;
-  right: 18px;
-  bottom: 12px;
-  border: 1px dashed rgba(248, 250, 252, 0.2);
-  border-radius: 50% / 30%;
+  top: clamp(8px, 2vw, 16px);
+  left: clamp(12px, 3vw, 24px);
+  right: clamp(12px, 3vw, 24px);
+  bottom: clamp(8px, 2vw, 16px);
+  border: 1px dashed rgba(248, 250, 252, 0.15);
+  border-radius: 50% / 35%;
   pointer-events: none;
 }
 
-.community-cards {
-  text-align: center;
+/* Community Area */
+.community-area {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 10;
-  background: rgba(31, 41, 55, 0.3);
-  border-radius: 20px;
-  padding: 20px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  text-align: center;
 }
 
-.pot-info {
-  margin-bottom: 20px;
-  padding: 16px 24px;
-  background: linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(31, 41, 55, 0.6) 100%);
-  border-radius: 12px;
-  border: 2px solid rgba(245, 158, 11, 0.4);
-  box-shadow: 
-    0 4px 12px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(245, 158, 11, 0.2);
+.pot-display {
+  background: rgba(31, 41, 55, 0.8);
+  border-radius: var(--border-radius-lg);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  box-shadow: var(--shadow-md);
+}
+
+.community-cards {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .pot-amount {
-  color: #f59e0b;
+  color: var(--color-warning);
   font-family: 'Montserrat', sans-serif;
   font-weight: 800;
-  font-size: 1.6rem;
+  font-size: clamp(1.2rem, 3vw, 1.8rem);
   margin: 0;
-  text-shadow: 
-    0 0 12px rgba(245, 158, 11, 0.6),
-    0 2px 4px rgba(0, 0, 0, 0.4);
+  text-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
   letter-spacing: 0.5px;
 }
 
 .current-bet {
-  color: #f8fafc;
+  color: var(--color-text-primary);
   font-family: 'Montserrat', sans-serif;
   font-weight: 600;
-  font-size: 1.1rem;
-  margin: 8px 0 0 0;
+  font-size: var(--font-size-md);
+  margin-top: var(--space-xs);
   opacity: 0.9;
 }
 
-.cards {
-  display: flex;
-  gap: 12px;  /* 8-12px间距 */
-  justify-content: center;
-}
 
-/* 卡片样式和动画 */
-.card {
-  width: 54px;
-  height: 76px;
+
+/* Card Styles */
+.game-card {
+  width: clamp(32px, 4vw, 54px);
+  height: clamp(46px, 5.6vw, 76px);
+  aspect-ratio: var(--card-aspect-ratio);
   background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
-  border-radius: 8px;
+  border-radius: var(--border-radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: 'Montserrat', sans-serif;
-  font-size: 1.3rem;
+  font-size: clamp(0.8rem, 2vw, 1.3rem);
   font-weight: 700;
-  box-shadow: 
-    /* 投影效果 */
-    0 6px 16px rgba(0, 0, 0, 0.4),
-    0 3px 8px rgba(0, 0, 0, 0.2),
-    /* 细黑描边 */
-    inset 0 0 0 1px rgba(0, 0, 0, 0.1),
-    /* 高光 */
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: all var(--transition-base);
   position: relative;
   transform-style: preserve-3d;
 }
 
-.card:hover {
-  transform: translateY(-3px) scale(1.08);
-  box-shadow: 
-    0 12px 24px rgba(0, 0, 0, 0.5),
-    0 6px 16px rgba(0, 0, 0, 0.3),
-    inset 0 0 0 1px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+@media (hover: hover) {
+  .game-card:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  }
 }
 
-/* 卡牌发牌动画 - 180-220ms */
+/* Card Animations */
 @keyframes deal-card {
   0% {
     transform: translateX(-200px) translateY(-100px) rotate(15deg) scale(0.8);
@@ -903,11 +966,10 @@ onUnmounted(() => {
   }
 }
 
-.card.dealing {
+.game-card.dealing {
   animation: deal-card 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-/* 卡牌翻面动画 - 280ms */
 @keyframes flip-card {
   0% {
     transform: rotateY(0deg);
@@ -920,47 +982,46 @@ onUnmounted(() => {
   }
 }
 
-.card.flipping {
+.game-card.flipping {
   animation: flip-card 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 公共牌发牌延迟 */
-.community-cards .card:nth-child(1) { animation-delay: 0ms; }
-.community-cards .card:nth-child(2) { animation-delay: 50ms; }
-.community-cards .card:nth-child(3) { animation-delay: 100ms; }
-.community-cards .card:nth-child(4) { animation-delay: 200ms; }
-.community-cards .card:nth-child(5) { animation-delay: 250ms; }
+/* Deal Animation Delays */
+.community-cards .game-card:nth-child(1) { animation-delay: 0ms; }
+.community-cards .game-card:nth-child(2) { animation-delay: 50ms; }
+.community-cards .game-card:nth-child(3) { animation-delay: 100ms; }
+.community-cards .game-card:nth-child(4) { animation-delay: 200ms; }
+.community-cards .game-card:nth-child(5) { animation-delay: 250ms; }
 
-.card.small {
-  width: 35px;
-  height: 50px;
-  font-size: 0.8rem;
+/* Card States */
+.player-card {
+  width: clamp(24px, 3vw, 42px);
+  height: clamp(34px, 4.2vw, 59px);
+  font-size: clamp(0.6rem, 1.5vw, 1rem);
 }
 
-/* 玩家自己的卡牌应该是正常大小和白色背景 */
-.card.face-up {
-  width: 50px;
-  height: 70px;
-  background: #fff;
-  font-size: 1.2rem;
+.own-card {
+  width: clamp(32px, 4vw, 50px);
+  height: clamp(46px, 5.6vw, 70px);
+  background: #ffffff;
+  font-size: clamp(0.8rem, 2vw, 1.2rem);
 }
 
-.card.revealed {
+.game-card.revealed {
   transform: rotateY(0deg);
 }
 
-.card:not(.revealed) {
+.game-card:not(.revealed) {
   background: #4a5568;
   color: #fff;
 }
 
-/* 优雅的几何图案卡牌背面 */
+/* Card Back Design */
 .card-back {
   background: 
     linear-gradient(135deg, #1e40af 0%, #1d4ed8 25%, #2563eb 50%, #1d4ed8 75%, #1e40af 100%),
-    radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 75% 75%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
-  background-size: 100% 100%, 20px 20px, 15px 15px;
+    radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+  background-size: 100% 100%, 20px 20px;
   position: relative;
   overflow: hidden;
   color: transparent;
@@ -969,22 +1030,13 @@ onUnmounted(() => {
 .card-back::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background-image: 
     repeating-linear-gradient(45deg, 
       transparent 0px, 
       transparent 2px, 
-      rgba(255, 255, 255, 0.1) 2px, 
-      rgba(255, 255, 255, 0.1) 4px
-    ),
-    repeating-linear-gradient(-45deg, 
-      transparent 0px, 
-      transparent 2px, 
-      rgba(255, 255, 255, 0.1) 2px, 
-      rgba(255, 255, 255, 0.1) 4px
+      rgba(255, 255, 255, 0.08) 2px, 
+      rgba(255, 255, 255, 0.08) 4px
     );
   background-size: 8px 8px;
 }
@@ -992,75 +1044,73 @@ onUnmounted(() => {
 .card-back::after {
   content: '';
   position: absolute;
-  top: 3px;
-  left: 3px;
-  right: 3px;
-  bottom: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 8px;
-  background: 
-    radial-gradient(ellipse at center, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
+  inset: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--border-radius-sm);
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
 }
 
-.players {
+/* Players Layout */
+.players-container {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   width: 100%;
   height: 100%;
+  pointer-events: none;
 }
 
 .player-seat {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 160px;
-  height: 140px;
-  margin-left: -80px;
-  margin-top: -70px;
+  width: clamp(100px, 15vw, 160px);
+  height: clamp(80px, 12vw, 140px);
+  margin-left: clamp(-50px, -7.5vw, -80px);
+  margin-top: clamp(-40px, -6vw, -70px);
   text-align: center;
   z-index: 20;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-xs);
+  pointer-events: auto;
+  transition: all var(--transition-base);
 }
 
-/* 玩家头像 */
+/* Player Avatar */
 .player-avatar {
   position: relative;
-  width: 60px;
-  height: 60px;
+  width: clamp(40px, 6vw, 60px);
+  height: clamp(40px, 6vw, 60px);
 }
 
-.avatar-circle {
-  width: 60px;
-  height: 60px;
+.avatar-image {
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
   background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
-  border: 3px solid #4b5563;
+  border: clamp(2px, 0.5vw, 3px) solid #4b5563;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   z-index: 2;
-  box-shadow: 
-    0 4px 12px rgba(0, 0, 0, 0.4),
-    inset 0 2px 4px rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-md), inset 0 2px 4px rgba(255, 255, 255, 0.1);
 }
 
-.avatar-text {
-  color: #f8fafc;
+.avatar-initial {
+  color: var(--color-text-primary);
   font-family: 'Montserrat', sans-serif;
   font-weight: 700;
-  font-size: 1.2rem;
+  font-size: clamp(0.8rem, 2vw, 1.2rem);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
-/* 当前玩家头像高亮 */
-.player-avatar.active .avatar-circle {
-  border-color: #f59e0b;
+/* Active Player Highlight */
+.active-player .avatar-image {
+  border-color: var(--color-warning);
   box-shadow: 
     0 4px 16px rgba(245, 158, 11, 0.4),
     0 0 0 2px rgba(245, 158, 11, 0.6),
@@ -1068,34 +1118,35 @@ onUnmounted(() => {
   animation: pulse-glow 2s infinite;
 }
 
-/* 倒计时环 */
-.countdown-ring {
+/* Countdown Timer */
+.countdown-timer {
   position: absolute;
-  top: -4px;
-  left: -4px;
-  width: 68px;
-  height: 68px;
+  top: clamp(-3px, -0.5vw, -4px);
+  left: clamp(-3px, -0.5vw, -4px);
+  width: calc(100% + clamp(6px, 1vw, 8px));
+  height: calc(100% + clamp(6px, 1vw, 8px));
   z-index: 1;
 }
 
-.countdown-svg {
+.timer-svg {
   width: 100%;
   height: 100%;
   transform: rotate(-90deg);
 }
 
-.countdown-bg {
+.timer-bg {
   fill: none;
   stroke: rgba(75, 85, 99, 0.3);
   stroke-width: 2;
 }
 
-.countdown-progress {
+.timer-progress {
   fill: none;
-  stroke: #f59e0b;
+  stroke: var(--color-warning);
   stroke-width: 3;
   stroke-linecap: round;
-  animation: countdown-tick 30s linear infinite;
+  stroke-dasharray: 100, 100;
+  transition: stroke-dasharray var(--transition-base);
 }
 
 @keyframes pulse-glow {
@@ -1118,21 +1169,20 @@ onUnmounted(() => {
   100% { stroke-dasharray: 0, 100; }
 }
 
-.player-info {
-  background: linear-gradient(135deg, rgba(31, 41, 55, 0.9) 0%, rgba(31, 41, 55, 0.7) 100%);
+/* Player Info */
+.player-details {
+  background: rgba(31, 41, 55, 0.9);
   backdrop-filter: blur(12px);
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 0.8rem;
+  border-radius: var(--border-radius-md);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-xs);
   border: 1px solid rgba(245, 158, 11, 0.2);
-  box-shadow: 
-    0 3px 10px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(245, 158, 11, 0.1);
-  transition: all 0.3s ease;
-  min-width: 100px;
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(245, 158, 11, 0.1);
+  transition: all var(--transition-base);
+  min-width: clamp(80px, 12vw, 120px);
 }
 
-.player-seat.current-player .player-info {
+.active-player .player-details {
   border: 1px solid rgba(245, 158, 11, 0.5);
   box-shadow: 
     0 4px 12px rgba(245, 158, 11, 0.3),
@@ -1140,85 +1190,80 @@ onUnmounted(() => {
     inset 0 1px 0 rgba(245, 158, 11, 0.2);
 }
 
-.player-seat.folded .player-info {
-  background: linear-gradient(135deg, rgba(75, 85, 99, 0.6) 0%, rgba(55, 65, 81, 0.6) 100%);
+.folded-player .player-details {
+  background: rgba(75, 85, 99, 0.6);
   opacity: 0.6;
   border: 1px solid rgba(107, 114, 128, 0.3);
 }
 
-/* 动作标签 */
-.action-tag {
+/* Player Action Tags */
+.player-action {
   display: inline-block;
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  background: linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%);
   color: #1f2937;
   font-family: 'Montserrat', sans-serif;
   font-weight: 700;
-  font-size: 0.7rem;
-  padding: 2px 8px;
-  border-radius: 12px;
-  margin: 4px 0;
+  font-size: clamp(0.6rem, 1.2vw, 0.8rem);
+  padding: var(--space-xs);
+  border-radius: var(--border-radius-sm);
+  margin: var(--space-xs) 0;
   letter-spacing: 0.5px;
-  box-shadow: 
-    0 2px 6px rgba(245, 158, 11, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.3);
   border: 1px solid rgba(217, 119, 6, 0.5);
 }
 
 .player-name {
   font-family: 'Montserrat', sans-serif;
   font-weight: 600;
-  color: #f8fafc;
-  margin-bottom: 3px;
-  font-size: 0.85rem;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-xs);
+  font-size: clamp(0.75rem, 1.5vw, 0.9rem);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .player-chips {
-  color: #f59e0b;
+  color: var(--color-warning);
   font-family: 'Montserrat', sans-serif;
   font-weight: 700;
-  font-size: 0.8rem;
-  margin-bottom: 2px;
+  font-size: clamp(0.7rem, 1.4vw, 0.85rem);
+  margin-bottom: var(--space-xs);
   text-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
 }
 
 .player-bet {
-  color: #f8fafc;
+  color: var(--color-text-primary);
   font-family: 'Montserrat', sans-serif;
   font-weight: 600;
-  font-size: 0.7rem;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(245, 158, 11, 0.2) 100%);
-  padding: 3px 8px;
-  border-radius: 8px;
+  font-size: clamp(0.6rem, 1.2vw, 0.75rem);
+  background: rgba(245, 158, 11, 0.25);
+  padding: var(--space-xs);
+  border-radius: var(--border-radius-sm);
   border: 1px solid rgba(245, 158, 11, 0.4);
-  box-shadow: 
-    0 2px 4px rgba(245, 158, 11, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  margin-top: 4px;
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  margin-top: var(--space-xs);
   display: inline-block;
 }
 
-.player-seat.current-player .player-name {
-  color: #f8fafc;
+/* Player State Styles */
+.active-player .player-name {
   text-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
 }
 
-.player-seat.current-player .player-chips {
-  color: #f59e0b;
+.active-player .player-chips {
   text-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
 }
 
-.player-seat.folded .player-name {
+.folded-player .player-name {
   color: #9ca3af;
   text-shadow: none;
 }
 
-.player-seat.folded .player-chips {
+.folded-player .player-chips {
   color: #6b7280;
   text-shadow: none;
 }
 
-.player-seat.folded .player-bet {
+.folded-player .player-bet {
   color: #9ca3af;
   background: rgba(156, 163, 175, 0.2);
   border: 1px solid rgba(156, 163, 175, 0.3);
@@ -1227,55 +1272,65 @@ onUnmounted(() => {
 
 .player-cards {
   display: flex;
-  gap: 3px;
+  gap: clamp(2px, 0.5vw, 4px);
   justify-content: center;
+  margin-top: var(--space-xs);
 }
 
-/* 操作面板样式 */
+/* Action Panel Styles */
 .action-panel {
-  background: linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.95) 100%);
+  background: var(--color-surface);
   backdrop-filter: blur(20px);
-  border-radius: 16px;
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  padding: 20px;
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(245, 158, 11, 0.1);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(245, 158, 11, 0.1);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-md);
 }
 
-/* 主操作按钮组 */
-.action-buttons {
+.panel-title {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  margin: 0;
+  text-align: center;
+}
+
+/* Primary Action Buttons */
+.primary-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-sm);
 }
 
 .action-btn {
-  background: linear-gradient(135deg, rgba(75, 85, 99, 0.9) 0%, rgba(55, 65, 81, 0.9) 100%);
+  background: rgba(75, 85, 99, 0.9);
   border: 1px solid rgba(107, 114, 128, 0.4);
-  border-radius: 12px;
-  padding: 12px 8px;
+  border-radius: var(--border-radius-md);
+  padding: var(--space-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-xs);
   font-family: 'Montserrat', sans-serif;
   position: relative;
   overflow: hidden;
+  min-height: var(--min-touch-size);
 }
 
-.action-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 
-    0 4px 12px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(245, 158, 11, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+@media (hover: hover) {
+  .action-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 
+      var(--shadow-md),
+      0 0 0 1px rgba(245, 158, 11, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
 }
 
 .action-btn:active:not(:disabled) {
@@ -1288,69 +1343,78 @@ onUnmounted(() => {
   transform: none;
 }
 
-.btn-text {
+.action-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.btn-label {
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
   letter-spacing: 0.5px;
-  color: #f8fafc;
+  color: var(--color-text-primary);
 }
 
-.btn-subtitle {
+.btn-desc {
   font-weight: 500;
-  font-size: 0.7rem;
-  color: #cbd5e1;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 
-/* 弃牌按钮 */
+/* Button Variants */
 .fold-btn {
   background: linear-gradient(135deg, rgba(220, 38, 38, 0.8) 0%, rgba(185, 28, 28, 0.8) 100%);
   border: 1px solid rgba(239, 68, 68, 0.4);
 }
 
-.fold-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.9) 0%, rgba(220, 38, 38, 0.9) 100%);
-  box-shadow: 
-    0 4px 12px rgba(220, 38, 38, 0.4),
-    0 0 0 1px rgba(239, 68, 68, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+@media (hover: hover) {
+  .fold-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.9) 0%, rgba(220, 38, 38, 0.9) 100%);
+    box-shadow: 
+      0 4px 12px rgba(220, 38, 38, 0.4),
+      0 0 0 1px rgba(239, 68, 68, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
 }
 
-/* 跟注/过牌按钮 */
 .call-btn {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.8) 0%, rgba(37, 99, 235, 0.8) 100%);
   border: 1px solid rgba(96, 165, 250, 0.4);
 }
 
-.call-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(96, 165, 250, 0.9) 0%, rgba(59, 130, 246, 0.9) 100%);
-  box-shadow: 
-    0 4px 12px rgba(59, 130, 246, 0.4),
-    0 0 0 1px rgba(96, 165, 250, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+@media (hover: hover) {
+  .call-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.9) 0%, rgba(59, 130, 246, 0.9) 100%);
+    box-shadow: 
+      0 4px 12px rgba(59, 130, 246, 0.4),
+      0 0 0 1px rgba(96, 165, 250, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
 }
 
-/* 下注/加注按钮（主按钮） */
-.raise-btn.primary-btn {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+.raise-btn {
+  background: linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%);
   border: 1px solid #fbbf24;
-  animation: pulse-main-btn 1.1s infinite;
+  animation: pulse-main-btn 2s infinite;
 }
 
-.raise-btn.primary-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-  box-shadow: 
-    0 6px 16px rgba(245, 158, 11, 0.5),
-    0 0 0 2px rgba(251, 191, 36, 0.7),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  animation: none;
+@media (hover: hover) {
+  .raise-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #fbbf24 0%, var(--color-warning) 100%);
+    box-shadow: 
+      0 6px 16px rgba(245, 158, 11, 0.5),
+      0 0 0 2px rgba(251, 191, 36, 0.7),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    animation: none;
+  }
 }
 
-.raise-btn.primary-btn .btn-text {
+.raise-btn .btn-label {
   color: #1f2937;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-.raise-btn.primary-btn .btn-subtitle {
+.raise-btn .btn-desc {
   color: #374151;
 }
 
@@ -1367,23 +1431,23 @@ onUnmounted(() => {
   }
 }
 
-/* 下注滑条 */
-.betting-slider {
+/* Betting Controls */
+.betting-controls {
   background: rgba(31, 41, 55, 0.5);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: var(--border-radius-md);
+  padding: var(--space-md);
   border: 1px solid rgba(75, 85, 99, 0.3);
 }
 
-.slider-container {
+.slider-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .bet-slider {
   width: 100%;
-  height: 6px;
+  height: clamp(4px, 1vw, 6px);
   background: linear-gradient(to right, rgba(75, 85, 99, 0.5) 0%, rgba(245, 158, 11, 0.3) 100%);
   border-radius: 3px;
   outline: none;
@@ -1395,101 +1459,112 @@ onUnmounted(() => {
 .bet-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 18px;
-  height: 18px;
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  width: clamp(16px, 3vw, 20px);
+  height: clamp(16px, 3vw, 20px);
+  background: linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%);
   border-radius: 50%;
   cursor: pointer;
   border: 2px solid #fbbf24;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+  box-shadow: var(--shadow-sm);
 }
 
 .bet-slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  width: clamp(16px, 3vw, 20px);
+  height: clamp(16px, 3vw, 20px);
+  background: linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%);
   border-radius: 50%;
   cursor: pointer;
   border: 2px solid #fbbf24;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+  box-shadow: var(--shadow-sm);
 }
 
 .slider-labels {
   display: flex;
   justify-content: space-between;
   font-family: 'Montserrat', sans-serif;
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   font-weight: 600;
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
 }
 
-.slider-labels span:nth-child(2) {
-  color: #f59e0b;
-  font-size: 0.8rem;
+.current-label {
+  color: var(--color-warning);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
 }
 
-/* 快捷筹码按钮 */
-.quick-chips {
+/* Quick Bet Buttons */
+.quick-bets {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-sm);
 }
 
-.chip-btn {
-  background: linear-gradient(135deg, rgba(31, 41, 55, 0.9) 0%, rgba(17, 24, 39, 0.9) 100%);
+.quick-bet-btn {
+  background: rgba(31, 41, 55, 0.9);
   border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: 8px;
-  padding: 8px 4px;
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-xs) var(--space-xs);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-xs);
   font-family: 'Montserrat', sans-serif;
+  min-height: calc(var(--min-touch-size) * 0.8);
 }
 
-.chip-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(245, 158, 11, 0.1) 100%);
-  border-color: rgba(245, 158, 11, 0.5);
-  transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(245, 158, 11, 0.3);
+@media (hover: hover) {
+  .quick-bet-btn:hover:not(:disabled) {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.5);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
 }
 
-.chip-btn:disabled {
+.quick-bet-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.chip-amount {
-  font-size: 0.65rem;
+.quick-bet-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.bet-type {
+  font-size: clamp(0.6rem, 1.2vw, 0.7rem);
   font-weight: 700;
-  color: #f59e0b;
+  color: var(--color-warning);
   letter-spacing: 0.3px;
 }
 
-.chip-value {
-  font-size: 0.6rem;
+.bet-amount {
+  font-size: clamp(0.55rem, 1.1vw, 0.65rem);
   font-weight: 500;
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
 }
 
-.all-in-chip {
+.all-in-btn {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.8) 0%, rgba(220, 38, 38, 0.8) 100%);
   border: 1px solid rgba(248, 113, 113, 0.4);
 }
 
-.all-in-chip:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(248, 113, 113, 0.9) 0%, rgba(239, 68, 68, 0.9) 100%);
-  border-color: rgba(248, 113, 113, 0.6);
-  box-shadow: 0 3px 8px rgba(239, 68, 68, 0.4);
+@media (hover: hover) {
+  .all-in-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(248, 113, 113, 0.9) 0%, rgba(239, 68, 68, 0.9) 100%);
+    border-color: rgba(248, 113, 113, 0.6);
+    box-shadow: var(--shadow-sm);
+  }
 }
 
-.all-in-chip .chip-amount {
+.all-in-btn .bet-type {
   color: #fecaca;
 }
 
-.all-in-chip .chip-value {
+.all-in-btn .bet-amount {
   color: #fed7d7;
 }
 
@@ -1650,113 +1725,124 @@ onUnmounted(() => {
   box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
 }
 
+/* Game Log */
 .game-log {
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%);
+  background: var(--color-surface);
   backdrop-filter: blur(20px);
-  border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  padding: 16px;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border);
+  padding: var(--space-md);
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  box-shadow: 
-    0 6px 24px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-.log-header h4 {
-  background: linear-gradient(135deg, #f8fafc 0%, #cbd5e1 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin: 0 0 12px 0;
-  font-size: 1rem;
+.log-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: var(--space-md);
+}
+
+.debug-section {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--border-radius-md);
+  padding: var(--space-sm);
+}
+
+.debug-title {
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
   font-weight: 700;
-  letter-spacing: -0.025em;
+  margin: 0 0 var(--space-sm) 0;
 }
 
-.log-content {
+.debug-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-xs);
+}
+
+.debug-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-size-xs);
+}
+
+.debug-label {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.debug-value {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.log-entries {
   flex: 1;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
 }
 
-.log-content::-webkit-scrollbar {
+.log-entries::-webkit-scrollbar {
   width: 6px;
 }
 
-.log-content::-webkit-scrollbar-track {
+.log-entries::-webkit-scrollbar-track {
   background: rgba(148, 163, 184, 0.1);
   border-radius: 3px;
 }
 
-.log-content::-webkit-scrollbar-thumb {
+.log-entries::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.3);
   border-radius: 3px;
-  transition: background 0.3s ease;
+  transition: background var(--transition-base);
 }
 
-.log-content::-webkit-scrollbar-thumb:hover {
+.log-entries::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.5);
 }
 
-.log-item {
+.log-entry {
   display: flex;
-  gap: 12px;
-  margin-bottom: 10px;
-  font-size: 0.85rem;
-  padding: 8px 12px;
-  border-radius: 8px;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+  font-size: var(--font-size-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--border-radius-sm);
   background: rgba(30, 41, 59, 0.3);
   border: 1px solid rgba(148, 163, 184, 0.1);
-  transition: all 0.3s ease;
+  transition: all var(--transition-base);
 }
 
-.log-item:hover {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+@media (hover: hover) {
+  .log-entry:hover {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+  }
 }
 
 .log-time {
   color: #94a3b8;
-  min-width: 70px;
+  min-width: clamp(60px, 10vw, 80px);
   font-weight: 500;
   font-family: 'Courier New', monospace;
-  font-size: 0.8rem;
+  font-size: var(--font-size-xs);
 }
 
 .log-message {
-  color: #e2e8f0;
+  color: var(--color-text-secondary);
   font-weight: 500;
   flex: 1;
 }
 
-.debug-info {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.15) 100%);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 16px;
-  font-size: 0.8rem;
-}
-
-.debug-info p {
-  color: #cbd5e1;
-  margin: 4px 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.debug-info strong {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-weight: 700;
-}
 
 /* 扑克牌花色颜色 */
 .red-suit {
@@ -1783,331 +1869,123 @@ onUnmounted(() => {
   border-color: #667eea;
 }
 
-/* 响应式断点设计 */
+/* Card Suit Colors */
+.red-suit {
+  color: #dc3545 !important;
+}
 
-/* 桌面端 - ≥1280px */
-@media (min-width: 1280px) {
-  .game {
-    padding: 20px;
+.black-suit {
+  color: #000 !important;
+}
+
+/* Animation Keyframes */
+@keyframes pulse-glow {
+  0%, 100% { 
+    box-shadow: 
+      var(--shadow-md),
+      0 0 0 2px rgba(245, 158, 11, 0.6),
+      inset 0 2px 4px rgba(255, 255, 255, 0.2);
   }
-  
-  .poker-table {
-    height: 520px;
-    min-width: 800px;
-  }
-  
-  .player-seat {
-    width: 140px;
-    height: 120px;
-  }
-  
-  .card {
-    width: 58px;
-    height: 82px;
-    font-size: 1.4rem;
-  }
-  
-  .player-avatar {
-    width: 70px;
-    height: 70px;
-  }
-  
-  .action-panel {
-    padding: 24px;
-    min-width: 320px;
-  }
-  
-  .action-buttons {
-    gap: 16px;
-  }
-  
-  .action-btn {
-    padding: 16px 12px;
-  }
-  
-  .btn-text {
-    font-size: 1rem;
-  }
-  
-  .quick-chips {
-    gap: 12px;
+  50% { 
+    box-shadow: 
+      var(--shadow-lg),
+      0 0 0 3px rgba(245, 158, 11, 0.8),
+      inset 0 2px 4px rgba(255, 255, 255, 0.3);
   }
 }
 
-/* 大屏平板端 - 1024px */
-@media (max-width: 1279px) and (min-width: 1025px) {
-  .game {
-    padding: 18px;
+@keyframes pulse-main-btn {
+  0%, 100% { 
+    box-shadow: 
+      0 4px 12px rgba(245, 158, 11, 0.4),
+      0 0 0 1px rgba(245, 158, 11, 0.5);
   }
-  
-  .right-panel {
-    width: 280px;
-  }
-  
-  .poker-table {
-    height: 480px;
-  }
-  
-  .player-seat {
-    width: 130px;
-    height: 110px;
-  }
-  
-  .action-panel {
-    padding: 22px;
+  50% { 
+    box-shadow: 
+      0 6px 16px rgba(245, 158, 11, 0.6),
+      0 0 0 2px rgba(245, 158, 11, 0.7);
   }
 }
 
-/* 平板端 - ≤1024px */
+/* Responsive Design */
+@container (max-width: 600px) {
+  .primary-actions {
+    grid-template-columns: 1fr;
+    gap: var(--space-xs);
+  }
+  
+  .quick-bets {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Mobile Breakpoints */
 @media (max-width: 1024px) {
-  .game {
-    padding: 15px;
+  .game-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
   }
   
-  .game-table {
-    flex-direction: column;
-    gap: 12px;
-  }
-  
-  .right-panel {
+  .side-panel {
     width: 100%;
     flex-direction: row;
-    gap: 12px;
-    max-height: 200px;
+    max-height: clamp(200px, 30vh, 300px);
   }
   
   .action-panel {
-    flex: 1.2;
-    padding: 18px;
+    flex: 1.5;
   }
   
   .game-log {
-    flex: 0.8;
-  }
-  
-  .poker-table {
-    height: 420px;
-    border-radius: 45% / 28%;
-  }
-  
-  .poker-table::before,
-  .poker-table::after {
-    border-radius: 45% / 28%;
-  }
-  
-  .player-seat {
-    width: 110px;
-    height: 90px;
-  }
-  
-  .card {
-    width: 48px;
-    height: 68px;
-    font-size: 1.1rem;
-  }
-  
-  .player-avatar {
-    width: 50px;
-    height: 50px;
-  }
-  
-  .action-buttons {
-    gap: 8px;
-  }
-  
-  .action-btn {
-    padding: 10px 6px;
-  }
-  
-  .btn-text {
-    font-size: 0.8rem;
-  }
-  
-  .btn-subtitle {
-    font-size: 0.65rem;
-  }
-  
-  .quick-chips {
-    gap: 6px;
-  }
-  
-  .chip-btn {
-    padding: 6px 3px;
+    flex: 1;
   }
 }
 
-/* 手机端 - <768px */
-@media (max-width: 767px) {
-  .game {
-    padding: 12px;
-    overflow-x: hidden;
-  }
-  
+@media (max-width: 768px) {
   .game-header {
-    padding: 12px 16px;
-    margin-bottom: 8px;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  
-  .game-header h2 {
-    font-size: 1.3rem;
-  }
-  
-  .game-table {
-    gap: 8px;
-  }
-  
-  .poker-table {
-    height: 280px;
-    border-radius: 50% / 32%;
-  }
-  
-  .poker-table::before,
-  .poker-table::after {
-    border-radius: 50% / 32%;
-  }
-  
-  .player-seat {
-    width: 85px;
-    height: 70px;
-    margin-left: -42px;
-    margin-top: -35px;
-  }
-  
-  .card {
-    width: 32px;
-    height: 46px;
-    font-size: 0.8rem;
-  }
-  
-  .card.small {
-    width: 24px;
-    height: 34px;
-    font-size: 0.6rem;
-  }
-  
-  .player-avatar {
-    width: 40px;
-    height: 40px;
-  }
-  
-  .player-info {
-    padding: 6px 8px;
-    font-size: 0.7rem;
-    min-width: 80px;
-  }
-  
-  .right-panel {
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-sm);
+    align-items: stretch;
+  }
+  
+  .user-controls {
+    align-items: stretch;
+  }
+  
+  .control-buttons {
+    justify-content: center;
+  }
+  
+  .side-panel {
+    flex-direction: column;
     max-height: none;
   }
   
-  .action-panel {
-    padding: 16px;
-  }
-  
-  .action-buttons {
-    gap: 6px;
-  }
-  
-  .action-btn {
-    padding: 8px 4px;
-  }
-  
-  .btn-text {
-    font-size: 0.75rem;
-  }
-  
-  .btn-subtitle {
-    font-size: 0.6rem;
-  }
-  
-  .betting-slider {
-    padding: 12px;
-  }
-  
-  .quick-chips {
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-  
-  .chip-btn {
-    padding: 6px 4px;
-  }
-  
-  .chip-amount {
-    font-size: 0.6rem;
-  }
-  
-  .chip-value {
-    font-size: 0.55rem;
-  }
-  
-  .community-cards {
-    gap: 4px;
-  }
-  
-  .game-log {
-    max-height: 150px;
-    font-size: 0.75rem;
-  }
-  
-  .debug-info p {
-    font-size: 0.7rem;
-    margin: 2px 0;
+  .debug-grid {
+    grid-template-columns: 1fr;
   }
 }
 
-/* 超小屏设备 - <480px */
-@media (max-width: 479px) {
+@media (max-width: 480px) {
   .game {
-    padding: 8px;
+    padding: var(--space-xs);
+  }
+  
+  .game-header {
+    padding: var(--space-sm);
   }
   
   .poker-table {
-    height: 220px;
+    width: clamp(300px, 90vw, 500px);
+    height: clamp(200px, 50vh, 350px);
   }
   
-  .player-seat {
-    width: 70px;
-    height: 60px;
-    margin-left: -35px;
-    margin-top: -30px;
+  .primary-actions {
+    grid-template-columns: 1fr;
   }
   
-  .card {
-    width: 28px;
-    height: 40px;
-    font-size: 0.7rem;
-  }
-  
-  .card.small {
-    width: 20px;
-    height: 28px;
-    font-size: 0.5rem;
-  }
-  
-  .player-avatar {
-    width: 32px;
-    height: 32px;
-  }
-  
-  .avatar-text {
-    font-size: 0.7rem;
-  }
-  
-  .action-panel {
-    padding: 12px;
-  }
-  
-  .btn-text {
-    font-size: 0.7rem;
-  }
-  
-  .btn-subtitle {
-    font-size: 0.55rem;
+  .quick-bets {
+    grid-template-columns: 1fr 1fr;
   }
 }
 </style>
