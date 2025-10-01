@@ -5,40 +5,33 @@
       <div class="game-info">
         <h1 class="game-title">德州扑克</h1>
         <div class="room-details">
-          <span class="room-id">房间: {{ gameStore.roomId || 'N/A' }}</span>
-          <span class="blinds">底注: ${{ gameStore.smallBlind }}/${{ gameStore.bigBlind }}</span>
+          <span class="room-id">房间: {{ roomId }}</span>
+          <span class="blinds">底注: ${{ blinds.small }}/${{ blinds.big }}</span>
         </div>
       </div>
       <div class="user-controls">
         <div class="user-identity">
-          <span class="username">{{ userStore.username }}</span>
-          <span v-if="gameStore.isRoomCreator" class="user-role">房主</span>
+          <span class="username">{{ username }}</span>
+          <span v-if="isRoomCreator" class="user-role">房主</span>
         </div>
         <div class="control-buttons">
-          <button
-            v-if="gameStore.gamePhase === 'waiting' && gameStore.isRoomCreator"
+          <button 
+            v-if="!gameState.gameStarted && isRoomCreator" 
             class="btn btn-success"
             @click="startGame"
-            :disabled="gameStore.players.length < 2"
+            :disabled="players.length < 2"
           >
-            开始游戏 ({{ gameStore.players.length }}/6)
+            开始游戏 ({{ players.length }}/6)
           </button>
-          <span v-if="gameStore.gamePhase === 'waiting' && !gameStore.isRoomCreator" class="waiting-status">
+          <span v-if="!gameState.gameStarted && !isRoomCreator" class="waiting-status">
             等待房主开始...
           </span>
-          <button
-            v-if="gameStore.gamePhase !== 'waiting'"
-            class="btn btn-secondary"
-            @click="addAI"
-          >
-            添加AI
-          </button>
           <button class="btn btn-warning" @click="resetGame">重开</button>
           <button class="btn btn-danger" @click="leaveGame">离开</button>
         </div>
       </div>
     </header>
-
+    
     <!-- Main Game Area -->
     <main class="game-main">
       <!-- Poker Table Container -->
@@ -47,33 +40,37 @@
           <!-- Community Cards Area -->
           <div class="community-area">
             <div class="pot-display">
-              <div class="pot-amount">奖池 ${{ gameStore.totalPot }}</div>
-              <div class="current-bet" v-if="gameStore.currentBet > 0">下注 ${{ gameStore.currentBet }}</div>
+              <div class="pot-amount">奖池 ${{ pot }}</div>
+              <div class="current-bet" v-if="currentBet > 0">下注 ${{ currentBet }}</div>
             </div>
             <div class="community-cards">
               <div
-                v-for="(card, index) in gameStore.communityCards"
+                v-for="(card, index) in communityCards"
                 :key="`community-${index}`"
                 class="game-card"
+                :class="{ 
+                  'revealed': card.revealed,
+                  'card-back': !card.revealed
+                }"
               >
-                <span :class="getCardColor(card.suit)">
+                <span v-if="card.revealed" :class="getCardColor(card.suit)">
                   {{ card.suit }}{{ card.rank }}
                 </span>
               </div>
             </div>
           </div>
-
+          
           <!-- Players Around Table -->
           <div class="players-container">
             <div
-              v-for="(player, index) in gameStore.players"
+              v-for="(player, index) in players"
               :key="player.id"
               class="player-seat"
               :class="{
-                'active-player': index === gameStore.currentPlayerIndex,
+                'active-player': player.id === currentPlayer,
                 'folded-player': player.folded,
                 'all-in-player': player.allIn,
-                'current-user': player.id === userStore.user?.id
+                'current-user': player.id === userId
               }"
               :style="getPlayerPosition(index)"
             >
@@ -81,10 +78,15 @@
               <div class="player-avatar">
                 <div class="avatar-image">
                   <span class="avatar-initial">{{ player.name.charAt(0).toUpperCase() }}</span>
-                  <span v-if="player.isAI" class="ai-badge">AI</span>
+                </div>
+                <div class="countdown-timer" v-if="player.id === currentPlayer">
+                  <svg class="timer-svg" viewBox="0 0 36 36">
+                    <circle class="timer-bg" cx="18" cy="18" r="16"/>
+                    <circle class="timer-progress" cx="18" cy="18" r="16"/>
+                  </svg>
                 </div>
               </div>
-
+              
               <!-- Player Info -->
               <div class="player-details">
                 <div class="player-name">{{ player.name }}</div>
@@ -96,20 +98,20 @@
                   ${{ player.currentBet }}
                 </div>
               </div>
-
+              
               <!-- Player Cards -->
-              <div class="player-cards" v-if="player.cards && player.cards.length > 0">
+              <div class="player-cards" v-if="player.cards.length > 0">
                 <div
                   v-for="(card, cardIndex) in player.cards"
                   :key="`${player.id}-card-${cardIndex}`"
                   class="game-card player-card"
-                  :class="{
-                    'own-card': player.id === userStore.user?.id,
-                    'opponent-card': player.id !== userStore.user?.id,
-                    'card-back': player.id !== userStore.user?.id && !card.revealed
+                  :class="{ 
+                    'own-card': player.id === userId,
+                    'opponent-card': player.id !== userId,
+                    'card-back': player.id !== userId
                   }"
                 >
-                  <span v-if="player.id === userStore.user?.id || card.revealed" :class="getCardColor(card.suit)">
+                  <span v-if="player.id === userId" :class="getCardColor(card.suit)">
                     {{ card.suit }}{{ card.rank }}
                   </span>
                 </div>
@@ -118,67 +120,133 @@
           </div>
         </div>
       </section>
-
+      
       <!-- Side Panel -->
       <aside class="side-panel">
         <!-- Action Panel -->
-        <section class="action-panel" v-if="gameStore.isMyTurn">
+        <section class="action-panel" v-if="isMyTurn">
           <h3 class="panel-title">您的回合</h3>
-
+          
           <!-- Primary Actions -->
           <div class="primary-actions">
             <button class="action-btn fold-btn" @click="fold">
               <span class="btn-label">FOLD</span>
               <span class="btn-desc">弃牌</span>
             </button>
-
-            <button
-              class="action-btn call-btn"
+            
+            <button 
+              class="action-btn call-btn" 
               @click="canCheck ? check() : call()"
+              :disabled="!canCheck && callAmount > currentPlayer?.chips"
             >
               <span class="btn-label">{{ canCheck ? 'CHECK' : 'CALL' }}</span>
               <span class="btn-desc">
                 {{ canCheck ? '过牌' : `跟注 $${callAmount}` }}
               </span>
             </button>
-
-            <button
-              class="action-btn raise-btn"
-              @click="showRaiseDialog = true"
+            
+            <button 
+              class="action-btn raise-btn" 
+              @click="bet"
+              :disabled="betAmount > currentPlayer?.chips"
             >
-              <span class="btn-label">RAISE</span>
-              <span class="btn-desc">加注</span>
-            </button>
-
-            <button class="action-btn allin-btn" @click="allIn">
-              <span class="btn-label">ALL-IN</span>
-              <span class="btn-desc">全下</span>
+              <span class="btn-label">{{ gameState.currentBet > 0 ? 'RAISE' : 'BET' }}</span>
+              <span class="btn-desc">
+                {{ gameState.currentBet > 0 ? '加注' : '下注' }} ${{ betAmount }}
+              </span>
             </button>
           </div>
-
-          <!-- Raise Dialog -->
-          <div v-if="showRaiseDialog" class="raise-dialog">
-            <h4>加注金额</h4>
-            <input
-              v-model.number="raiseAmount"
-              type="number"
-              :min="gameStore.minRaise"
-              :max="gameStore.myPlayer?.chips"
-              class="raise-input"
-            />
-            <div class="raise-actions">
-              <button @click="showRaiseDialog = false" class="btn btn-secondary">取消</button>
-              <button @click="raise" class="btn btn-primary">确认加注</button>
+          
+          <!-- Betting Slider -->
+          <div class="betting-controls">
+            <div class="slider-section">
+              <input 
+                type="range" 
+                v-model="betAmount" 
+                :min="minBet" 
+                :max="maxBet" 
+                :step="blinds.small"
+                class="bet-slider"
+              >
+              <div class="slider-labels">
+                <span class="min-label">${{ minBet }}</span>
+                <span class="current-label">${{ betAmount }}</span>
+                <span class="max-label">${{ maxBet }}</span>
+              </div>
             </div>
           </div>
+          
+          <!-- Quick Bet Options -->
+          <div class="quick-bets">
+            <button 
+              class="quick-bet-btn" 
+              @click="setBetAmount(Math.floor(gameState.pot * 0.5))"
+              :disabled="Math.floor(gameState.pot * 0.5) > currentPlayer?.chips"
+            >
+              <span class="bet-type">1/2 POT</span>
+              <span class="bet-amount">${{ Math.floor(gameState.pot * 0.5) }}</span>
+            </button>
+            
+            <button 
+              class="quick-bet-btn" 
+              @click="setBetAmount(Math.floor(gameState.pot * 0.67))"
+              :disabled="Math.floor(gameState.pot * 0.67) > currentPlayer?.chips"
+            >
+              <span class="bet-type">2/3 POT</span>
+              <span class="bet-amount">${{ Math.floor(gameState.pot * 0.67) }}</span>
+            </button>
+            
+            <button 
+              class="quick-bet-btn" 
+              @click="setBetAmount(gameState.pot)"
+              :disabled="gameState.pot > currentPlayer?.chips"
+            >
+              <span class="bet-type">POT</span>
+              <span class="bet-amount">${{ gameState.pot }}</span>
+            </button>
+            
+            <button class="quick-bet-btn all-in-btn" @click="allIn">
+              <span class="bet-type">ALL-IN</span>
+              <span class="bet-amount">${{ currentPlayer?.chips || 0 }}</span>
+            </button>
+          </div>
         </section>
-
+        
         <!-- Game Log -->
         <section class="game-log">
           <h3 class="panel-title">游戏记录</h3>
-          <div class="log-entries">
-            <div v-for="(log, index) in gameLogs" :key="index" class="log-entry">
-              {{ log }}
+          <div class="log-container">
+            <div class="debug-section">
+              <h4 class="debug-title">状态信息</h4>
+              <div class="debug-grid">
+                <div class="debug-item">
+                  <span class="debug-label">连接</span>
+                  <span class="debug-value">{{ socket ? '已连接' : '未连接' }}</span>
+                </div>
+                <div class="debug-item">
+                  <span class="debug-label">阶段</span>
+                  <span class="debug-value">{{ gameState.phase }}</span>
+                </div>
+                <div class="debug-item">
+                  <span class="debug-label">玩家</span>
+                  <span class="debug-value">{{ players.length }}/6</span>
+                </div>
+                <div class="debug-item">
+                  <span class="debug-label">底池</span>
+                  <span class="debug-value">${{ gameState.pot }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="log-entries">
+              <div
+                v-for="(log, index) in gameLog"
+                :key="`log-${index}`"
+                class="log-entry"
+              >
+                <time class="log-time">{{ formatTime(log.time) }}</time>
+                <span class="log-message">{{ log.message }}</span>
+              </div>
             </div>
           </div>
         </section>
@@ -188,57 +256,145 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { useUserStore } from '../stores/user'
-import { useGameStore } from '../stores/game'
-import socketService from '../services/socket'
+import { io } from 'socket.io-client'
 
 const router = useRouter()
-const route = useRoute()
-const userStore = useUserStore()
-const gameStore = useGameStore()
 
-// UI state
+// 用户和房间状态
+const username = ref(localStorage.getItem('username') || 'Guest')
+const userId = ref('user1')
+const roomId = ref('ROOM001')
+const isRoomCreator = ref(false)
+const roomStatus = ref('waiting')
+let socket = null
+
+// 响应式容器引用
 const pokerTableRef = ref(null)
-const showRaiseDialog = ref(false)
-const raiseAmount = ref(0)
-const gameLogs = ref([])
 
-// Computed properties
-const canCheck = computed(() => gameStore.currentBet === 0)
-const callAmount = computed(() => {
-  if (!gameStore.myPlayer) return 0
-  return gameStore.currentBet - (gameStore.myPlayer.currentBet || 0)
+// 初始化为空状态，等待后端数据
+const gameState = reactive({
+  currentPlayer: null,
+  phase: 'waiting',
+  pot: 0,
+  currentBet: 0,
+  minBet: 10,
+  maxBet: 1000,
+  gameStarted: false
 })
 
-// Methods
+const blinds = reactive({
+  small: 10,
+  big: 20
+})
+
+const betAmount = ref(20) // 默认为大盲注
+
+// 初始化为空，等待后端数据
+const communityCards = ref([])
+
+// 初始化为空，等待后端数据  
+const players = ref([])
+
+// 初始化为空，等待后端数据
+const gameLog = ref([])
+
+const currentPlayer = computed(() => gameState.currentPlayer)
+const pot = computed(() => gameState.pot)
+const currentBet = computed(() => gameState.currentBet)
+const minBet = computed(() => Math.max(gameState.minBet, gameState.currentBet))
+const maxBet = computed(() => {
+  const myPlayer = players.value.find(p => p.id === userId.value)
+  return myPlayer ? myPlayer.chips : 0
+})
+const isMyTurn = computed(() => gameState.currentPlayer === userId.value)
+const canCheck = computed(() => gameState.currentBet === 0)
+const callAmount = computed(() => gameState.currentBet)
+
+// 响应式玩家位置计算
 const getPlayerPosition = (index) => {
   if (!pokerTableRef.value) {
+    // 默认位置，用于服务端渲染或初始渲染
     return { transform: 'translate(0px, 0px)' }
   }
-
+  
   const container = pokerTableRef.value
   const containerRect = container.getBoundingClientRect()
   const containerWidth = containerRect.width || 600
   const containerHeight = containerRect.height || 400
-
-  const totalPlayers = gameStore.players.length
-  const angle = (360 / totalPlayers) * index - 90 // Start from top
-
+  
+  const totalPlayers = players.value.length
+  const angle = (360 / totalPlayers) * index
+  
+  // 根据容器大小动态计算半径
   const radiusX = Math.min(containerWidth * 0.35, 280)
   const radiusY = Math.min(containerHeight * 0.3, 160)
-
+  
   const x = Math.cos((angle * Math.PI) / 180) * radiusX
   const y = Math.sin((angle * Math.PI) / 180) * radiusY
-
+  
   return {
-    transform: `translate(${x}px, ${y}px)`
+    transform: `translate(${x}px, ${y}px)`,
+    '--player-radius-x': `${radiusX}px`,
+    '--player-radius-y': `${radiusY}px`
   }
 }
 
+const fold = () => {
+  if (!socket) {
+    ElMessage.error('未连接到游戏服务器')
+    return
+  }
+  socket.emit('game_action', { action: 'fold' })
+}
+
+const check = () => {
+  if (!socket) {
+    ElMessage.error('未连接到游戏服务器')
+    return
+  }
+  socket.emit('game_action', { action: 'check' })
+}
+
+const call = () => {
+  if (!socket) {
+    ElMessage.error('未连接到游戏服务器')
+    return
+  }
+  socket.emit('game_action', { action: 'call' })
+}
+
+const bet = () => {
+  if (!socket) {
+    ElMessage.error('未连接到游戏服务器')
+    return
+  }
+  socket.emit('game_action', { action: 'bet', amount: betAmount.value })
+}
+
+const allIn = () => {
+  if (!socket) {
+    ElMessage.error('未连接到游戏服务器')
+    return
+  }
+  socket.emit('game_action', { action: 'all_in' })
+}
+
+const addLog = (message) => {
+  gameLog.value.push({
+    time: new Date(),
+    message
+  })
+}
+
+const formatTime = (time) => {
+  return time.toLocaleTimeString()
+}
+
 const getCardColor = (suit) => {
+  // 红桃和方块用红色，黑桃和梅花用黑色
   if (suit === '♥' || suit === '♦') {
     return 'red-suit'
   } else {
@@ -258,143 +414,286 @@ const getActionText = (action) => {
   return actionMap[action] || action.toUpperCase()
 }
 
-// Game actions
-const fold = () => {
-  gameStore.sendAction('fold')
-  addLog('您选择了弃牌')
-}
-
-const check = () => {
-  gameStore.sendAction('check')
-  addLog('您选择了过牌')
-}
-
-const call = () => {
-  gameStore.sendAction('call')
-  addLog(`您跟注 $${callAmount.value}`)
-}
-
-const raise = () => {
-  if (raiseAmount.value < gameStore.minRaise) {
-    ElMessage.error(`最小加注金额为 $${gameStore.minRaise}`)
-    return
-  }
-  gameStore.sendAction('raise', raiseAmount.value)
-  addLog(`您加注 $${raiseAmount.value}`)
-  showRaiseDialog.value = false
-}
-
-const allIn = () => {
-  gameStore.sendAction('all_in')
-  addLog('您选择了全下！')
-}
-
-const startGame = () => {
-  gameStore.startGame()
-  addLog('游戏开始！')
-}
-
-const resetGame = () => {
-  gameStore.resetGame()
-  addLog('游戏重置')
-}
-
-const addAI = () => {
-  gameStore.addAI()
-  addLog('添加AI玩家')
-}
-
 const leaveGame = () => {
-  gameStore.leaveRoom()
   router.push('/')
 }
 
-const addLog = (message) => {
-  gameLogs.value.unshift(`[${new Date().toLocaleTimeString()}] ${message}`)
-  if (gameLogs.value.length > 50) {
-    gameLogs.value.pop()
+const initSocket = () => {
+  socket = io('http://localhost:3001')
+  
+  socket.on('connect', () => {
+    console.log('Socket连接成功')
+    
+    // 验证身份
+    const token = localStorage.getItem('token')
+    if (token && token !== 'null' && token !== 'undefined' && token.length > 10) {
+      console.log('使用现有token进行认证')
+      socket.emit('authenticate', { token })
+    } else {
+      console.log('没有有效token，创建临时用户')
+      // 清理无效token
+      localStorage.removeItem('token')
+      localStorage.removeItem('username')
+      // 创建一个临时用户
+      createTemporaryUser()
+    }
+  })
+  
+  const createTemporaryUser = async () => {
+    try {
+      const tempUsername = `Player_${Date.now()}`
+      const response = await fetch('http://localhost:3001/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          username: tempUsername,
+          password: '123456'
+        })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        localStorage.setItem('token', data.token)
+        localStorage.setItem('username', data.user.username)
+        username.value = data.user.username
+        socket.emit('authenticate', { token: data.token })
+      } else {
+        console.error('创建临时用户失败')
+        ElMessage.error('创建临时用户失败')
+      }
+    } catch (error) {
+      console.error('创建临时用户错误:', error)
+      ElMessage.error('连接服务器失败')
+    }
   }
-}
 
-// Socket event handlers
-const setupSocketListeners = () => {
-  // Log game events
-  socketService.on('game_update', (data) => {
+  // 认证成功
+  socket.on('authenticated', (data) => {
+    console.log('身份验证成功:', data)
+    userId.value = data.user.id
+    username.value = data.user.username
+    
+    // 重置游戏状态，确保与后端同步
+    gameState.gameStarted = false
+    gameState.phase = 'waiting' 
+    gameState.pot = 0
+    gameState.currentBet = 0
+    gameState.currentPlayer = null
+    players.value = []
+    communityCards.value = []
+    gameLog.value.push({
+      time: new Date(),
+      message: `${data.user.username} 连接成功`
+    })
+    
+    // 加入房间
+    socket.emit('join_room', { roomId: roomId.value })
+  })
+
+  // 认证失败
+  socket.on('auth_error', (data) => {
+    console.error('认证失败:', data)
+    ElMessage.error(`认证失败: ${data.error}`)
+    
+    // 清理无效token并创建新用户
+    localStorage.removeItem('token')
+    localStorage.removeItem('username')
+    console.log('认证失败，创建新的临时用户')
+    createTemporaryUser()
+  })
+
+  socket.on('player_joined', (data) => {
+    console.log('玩家加入:', data)
+    players.value = data.players
+    updateGameState(data.gameState)
+    
+    // 使用后端返回的房主ID判断当前用户是否为房主
+    if (data.roomCreatorId) {
+      isRoomCreator.value = data.roomCreatorId === userId.value
+      console.log(`房主检查: 房主ID=${data.roomCreatorId}, 当前用户ID=${userId.value}, 是否房主=${isRoomCreator.value}`)
+    }
+    
+    ElMessage.success(`${data.player.name} 加入了游戏`)
+    
+    gameLog.value.push({
+      time: new Date(),
+      message: `${data.player.name} 加入了游戏`
+    })
+  })
+
+  socket.on('game_started', (data) => {
+    console.log('游戏开始:', data)
+    updateGameState(data.gameState)
+    addLog('游戏开始，发放底牌')
+  })
+
+  socket.on('game_reset', (data) => {
+    console.log('游戏重开:', data)
+    updateGameState(data.gameState)
+    addLog(data.message || '游戏已重开')
+  })
+
+  socket.on('game_update', (data) => {
+    console.log('游戏状态更新:', data)
+    updateGameState(data.gameState)
     if (data.lastAction) {
-      const action = data.lastAction
-      addLog(`${action.playerName} ${getActionText(action.action)}${action.amount ? ` $${action.amount}` : ''}`)
+      addLog(`${data.lastAction.player} ${data.lastAction.type === 'fold' ? '弃牌' : 
+                                         data.lastAction.type === 'check' ? '过牌' : 
+                                         data.lastAction.type === 'call' ? '跟注' : 
+                                         data.lastAction.type === 'bet' ? '下注' : 
+                                         data.lastAction.type === 'all_in' ? '全押' : data.lastAction.type} ${data.lastAction.amount ? '$' + data.lastAction.amount : ''}`)
     }
   })
 
-  socketService.on('game_started', () => {
-    addLog('游戏已开始！')
+  socket.on('ai_action', (data) => {
+    console.log('AI行动:', data)
+    const actionText = data.action === 'fold' ? '弃牌' : 
+                       data.action === 'check' ? '过牌' : 
+                       data.action === 'call' ? '跟注' : 
+                       data.action === 'bet' ? '下注' : 
+                       data.action === 'all_in' ? '全押' : data.action
+    addLog(`${data.playerName} ${actionText} ${data.amount ? '$' + data.amount : ''}`)
   })
 
-  socketService.on('game_finished', (data) => {
-    if (data.winners && data.winners.length > 0) {
-      const winnerNames = data.winners.map(w => w.name).join(', ')
-      addLog(`游戏结束！获胜者: ${winnerNames}`)
-    }
-  })
-
-  socketService.on('player_joined', (data) => {
-    addLog(`${data.player.name} 加入了游戏`)
-  })
-
-  socketService.on('player_left', (data) => {
-    addLog(`${data.player.name} 离开了游戏`)
-  })
-
-  socketService.on('action_error', (data) => {
+  socket.on('action_error', (data) => {
+    console.error('操作错误:', data)
     ElMessage.error(data.error)
-    addLog(`错误: ${data.error}`)
   })
 
-  socketService.on('error', (data) => {
+  socket.on('error', (data) => {
+    console.error('Socket错误:', data)
     ElMessage.error(data.error)
-    addLog(`错误: ${data.error}`)
+  })
+
+  socket.on('disconnect', () => {
+    console.log('Socket连接断开')
   })
 }
 
-// Lifecycle
-onMounted(async () => {
-  // Check if user is logged in
-  if (!userStore.isLoggedIn) {
-    ElMessage.error('请先登录')
-    router.push('/login')
+const updateGameState = (newState) => {
+  if (!newState) return
+  
+  gameState.currentPlayer = newState.players[newState.currentPlayerIndex]?.id
+  gameState.phase = newState.phase
+  gameState.pot = newState.pot
+  gameState.currentBet = newState.currentBet
+  gameState.gameStarted = newState.gameStarted
+  
+  // 更新玩家数据
+  players.value = newState.players.map(player => ({
+    id: player.id,
+    name: player.name,
+    chips: player.chips,
+    currentBet: player.currentBet,
+    cards: player.cards || [],
+    folded: player.folded,
+    allIn: player.allIn
+  }))
+  
+  // 更新公共牌
+  communityCards.value = newState.communityCards || []
+}
+
+const startGame = () => {
+  if (!socket) {
+    ElMessage.error('未连接到游戏服务器')
     return
   }
+  
+  if (!userId.value) {
+    ElMessage.error('用户未认证')
+    return
+  }
+  
+  if (players.value.length < 2) {
+    ElMessage.warning('至少需要2名玩家才能开始游戏')
+    return
+  }
+  
+  if (gameState.gameStarted) {
+    ElMessage.warning('游戏已经开始了')
+    return
+  }
+  
+  console.log('发送开始游戏请求...')
+  socket.emit('start_game')
+}
 
-  // Get room ID from query params or use default
-  const roomIdParam = route.query.roomId || 'default-room'
+const resetGame = () => {
+  if (!socket) {
+    ElMessage.error('未连接到游戏服务器')
+    return
+  }
+  
+  // 重置本地游戏状态
+  gameState.gameStarted = false
+  gameState.phase = 'waiting'
+  gameState.pot = 0
+  gameState.currentBet = 0
+  gameState.currentPlayer = null
+  
+  // 重置玩家数据
+  players.value.forEach(player => {
+    player.cards = []
+    player.currentBet = 0
+    player.folded = false
+    player.allIn = false
+  })
+  
+  // 重置公共牌
+  communityCards.value = []
+  
+  // 清空游戏日志
+  gameLog.value = []
+  
+  // 发送重开游戏请求
+  socket.emit('reset_game')
+  
+  ElMessage.success('游戏已重开')
+}
 
-  // Initialize stores
-  gameStore.initSocket()
-  setupSocketListeners()
+const setBetAmount = (amount) => {
+  betAmount.value = Math.max(minBet.value, Math.min(amount, maxBet.value))
+}
 
-  // Connect socket
-  socketService.connect()
+// 窗口大小变化处理
+const handleResize = () => {
+  // 强制重新计算玩家位置
+  if (players.value.length > 0) {
+    // 触发响应式更新
+    players.value = [...players.value]
+  }
+}
 
-  // Wait for socket to connect
-  setTimeout(() => {
-    if (socketService.getStatus().connected) {
-      socketService.authenticate(userStore.token)
-
-      // Wait for authentication
-      socketService.on('authenticated', () => {
-        gameStore.joinRoom(roomIdParam)
-        addLog('已连接到游戏服务器')
-      })
-    } else {
-      ElMessage.error('无法连接到游戏服务器')
-    }
-  }, 500)
+onMounted(() => {
+  // 开发阶段：强制清空localStorage确保干净的开始
+  if (import.meta.env.DEV) {
+    console.log('开发模式：清空localStorage确保干净的开始')
+    localStorage.removeItem('token')
+    localStorage.removeItem('username')
+  }
+  
+  // 添加窗口大小变化监听
+  window.addEventListener('resize', handleResize)
+  
+  initSocket()
+  ElMessage.success('正在连接游戏服务器...')
 })
 
-onBeforeUnmount(() => {
-  gameStore.cleanup()
-  gameStore.leaveRoom()
+onUnmounted(() => {
+  // 清理事件监听器
+  window.removeEventListener('resize', handleResize)
+  
+  if (socket) {
+    socket.emit('leave_room')
+    socket.disconnect()
+  }
 })
+</script>
+
+<style scoped>
 /* Import CSS Custom Properties */
 .game {
   min-height: 100vh;
@@ -1688,60 +1987,5 @@ onBeforeUnmount(() => {
   .quick-bets {
     grid-template-columns: 1fr 1fr;
   }
-}
-
-.ai-badge {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-size: 0.5rem;
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-weight: 700;
-}
-
-.allin-btn {
-  grid-column: span 1;
-}
-
-.raise-dialog {
-  margin-top: var(--space-md);
-  padding: var(--space-md);
-  background: rgba(31, 41, 55, 0.9);
-  border-radius: var(--border-radius-md);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.raise-dialog h4 {
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-sm);
-  font-size: var(--font-size-md);
-}
-
-.raise-input {
-  width: 100%;
-  padding: var(--space-sm);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: var(--border-radius-sm);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-md);
-  margin-bottom: var(--space-sm);
-}
-
-.raise-input:focus {
-  outline: none;
-  border-color: var(--color-warning);
-}
-
-.raise-actions {
-  display: flex;
-  gap: var(--space-sm);
-}
-
-.raise-actions .btn {
-  flex: 1;
 }
 </style>

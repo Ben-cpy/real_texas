@@ -52,17 +52,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useUserStore } from '../stores/user'
+import * as api from '../services/api'
 
 const router = useRouter()
+const userStore = useUserStore()
 
-const userStats = ref({
-  gamesPlayed: 0,
-  winRate: 0,
-  chips: 1000
-})
+const userStats = computed(() => ({
+  gamesPlayed: userStore.gamesPlayed,
+  winRate: userStore.winRate,
+  chips: userStore.chips
+}))
 
 const createRoom = async () => {
   try {
@@ -71,10 +74,23 @@ const createRoom = async () => {
       cancelButtonText: '取消',
       inputPlaceholder: '输入房间名称'
     })
-    
+
     if (roomName) {
-      ElMessage.success(`房间 "${roomName}" 创建成功！`)
-      // TODO: 实际创建房间的API调用
+      try {
+        const response = await api.createRoom({
+          name: roomName,
+          maxPlayers: 6,
+          smallBlind: 10,
+          bigBlind: 20
+        })
+
+        ElMessage.success(`房间 "${roomName}" 创建成功！`)
+
+        // Navigate to game room
+        router.push(`/game?roomId=${response.room.id}`)
+      } catch (error) {
+        ElMessage.error(error.response?.data?.error || '创建房间失败')
+      }
     }
   } catch {
     // 用户取消
@@ -88,22 +104,27 @@ const joinRoom = async () => {
       cancelButtonText: '取消',
       inputPlaceholder: '输入房间号'
     })
-    
+
     if (roomId) {
-      ElMessage.success(`正在加入房间 ${roomId}...`)
-      // TODO: 实际加入房间的API调用
+      try {
+        await api.joinRoom(roomId)
+        ElMessage.success(`正在加入房间...`)
+
+        // Navigate to game room
+        router.push(`/game?roomId=${roomId}`)
+      } catch (error) {
+        ElMessage.error(error.response?.data?.error || '加入房间失败')
+      }
     }
   } catch {
     // 用户取消
   }
 }
 
-onMounted(() => {
-  // TODO: 从API获取用户统计数据
-  const savedStats = localStorage.getItem('userStats')
-  if (savedStats) {
-    userStats.value = JSON.parse(savedStats)
-  }
+onMounted(async () => {
+  // Refresh user profile to get latest stats
+  await userStore.refreshProfile()
+  await userStore.fetchStats()
 })
 </script>
 

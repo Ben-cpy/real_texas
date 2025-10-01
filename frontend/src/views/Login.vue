@@ -87,8 +87,10 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
+import { useUserStore } from '../stores/user'
 
 const router = useRouter()
+const userStore = useUserStore()
 
 const loading = ref(false)
 const registerLoading = ref(false)
@@ -154,18 +156,16 @@ const handleLogin = async () => {
 
 const login = async () => {
   loading.value = true
-  
+
   try {
-    // 模拟登录API调用
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // 保存token到localStorage
-    const mockToken = 'mock_jwt_token_' + Date.now()
-    localStorage.setItem('token', mockToken)
-    localStorage.setItem('username', loginForm.username)
-    
-    ElMessage.success('登录成功！')
-    router.push('/')
+    const result = await userStore.login(loginForm.username, loginForm.password)
+
+    if (result.success) {
+      ElMessage.success(result.message || '登录成功！')
+      router.push('/')
+    } else {
+      ElMessage.error(result.error || '登录失败')
+    }
   } catch (error) {
     ElMessage.error('登录失败，请检查用户名和密码')
   } finally {
@@ -185,21 +185,19 @@ const handleRegister = async () => {
 
 const register = async () => {
   registerLoading.value = true
-  
+
   try {
-    // 模拟注册API调用
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    ElMessage.success('注册成功！请登录')
-    showRegister.value = false
-    
-    // 自动填入登录表单
-    loginForm.username = registerForm.username
-    
-    // 重置注册表单
-    registerForm.username = ''
-    registerForm.password = ''
-    registerForm.confirmPassword = ''
+    const result = await userStore.register(registerForm.username, registerForm.password)
+
+    if (result.success) {
+      ElMessage.success(result.message || '注册成功！正在登录...')
+      showRegister.value = false
+
+      // User is automatically logged in after registration
+      router.push('/')
+    } else {
+      ElMessage.error(result.error || '注册失败')
+    }
   } catch (error) {
     ElMessage.error('注册失败，请稍后重试')
   } finally {

@@ -1,0 +1,256 @@
+<template>
+  <div class="game">
+    <!-- Game Header -->
+    <header class="game-header">
+      <div class="game-info">
+        <h1 class="game-title">德州扑克</h1>
+        <div class="room-details">
+          <span class="room-id">房间: {{ roomId }}</span>
+          <span class="blinds">底注: ${{ blinds.small }}/${{ blinds.big }}</span>
+        </div>
+      </div>
+      <div class="user-controls">
+        <div class="user-identity">
+          <span class="username">{{ username }}</span>
+          <span v-if="isRoomCreator" class="user-role">房主</span>
+        </div>
+        <div class="control-buttons">
+          <button 
+            v-if="!gameState.gameStarted && isRoomCreator" 
+            class="btn btn-success"
+            @click="startGame"
+            :disabled="players.length < 2"
+          >
+            开始游戏 ({{ players.length }}/6)
+          </button>
+          <span v-if="!gameState.gameStarted && !isRoomCreator" class="waiting-status">
+            等待房主开始...
+          </span>
+          <button class="btn btn-warning" @click="resetGame">重开</button>
+          <button class="btn btn-danger" @click="leaveGame">离开</button>
+        </div>
+      </div>
+    </header>
+    
+    <!-- Main Game Area -->
+    <main class="game-main">
+      <!-- Poker Table Container -->
+      <section class="table-container">
+        <div class="poker-table" ref="pokerTableRef">
+          <!-- Community Cards Area -->
+          <div class="community-area">
+            <div class="pot-display">
+              <div class="pot-amount">奖池 ${{ pot }}</div>
+              <div class="current-bet" v-if="currentBet > 0">下注 ${{ currentBet }}</div>
+            </div>
+            <div class="community-cards">
+              <div
+                v-for="(card, index) in communityCards"
+                :key="`community-${index}`"
+                class="game-card"
+                :class="{ 
+                  'revealed': card.revealed,
+                  'card-back': !card.revealed
+                }"
+              >
+                <span v-if="card.revealed" :class="getCardColor(card.suit)">
+                  {{ card.suit }}{{ card.rank }}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Players Around Table -->
+          <div class="players-container">
+            <div
+              v-for="(player, index) in players"
+              :key="player.id"
+              class="player-seat"
+              :class="{
+                'active-player': player.id === currentPlayer,
+                'folded-player': player.folded,
+                'all-in-player': player.allIn,
+                'current-user': player.id === userId
+              }"
+              :style="getPlayerPosition(index)"
+            >
+              <!-- Player Avatar -->
+              <div class="player-avatar">
+                <div class="avatar-image">
+                  <span class="avatar-initial">{{ player.name.charAt(0).toUpperCase() }}</span>
+                </div>
+                <div class="countdown-timer" v-if="player.id === currentPlayer">
+                  <svg class="timer-svg" viewBox="0 0 36 36">
+                    <circle class="timer-bg" cx="18" cy="18" r="16"/>
+                    <circle class="timer-progress" cx="18" cy="18" r="16"/>
+                  </svg>
+                </div>
+              </div>
+              
+              <!-- Player Info -->
+              <div class="player-details">
+                <div class="player-name">{{ player.name }}</div>
+                <div class="player-chips">${{ player.chips }}</div>
+                <div class="player-action" v-if="player.lastAction">
+                  {{ getActionText(player.lastAction) }}
+                </div>
+                <div class="player-bet" v-if="player.currentBet > 0">
+                  ${{ player.currentBet }}
+                </div>
+              </div>
+              
+              <!-- Player Cards -->
+              <div class="player-cards" v-if="player.cards.length > 0">
+                <div
+                  v-for="(card, cardIndex) in player.cards"
+                  :key="`${player.id}-card-${cardIndex}`"
+                  class="game-card player-card"
+                  :class="{ 
+                    'own-card': player.id === userId,
+                    'opponent-card': player.id !== userId,
+                    'card-back': player.id !== userId
+                  }"
+                >
+                  <span v-if="player.id === userId" :class="getCardColor(card.suit)">
+                    {{ card.suit }}{{ card.rank }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      <!-- Side Panel -->
+      <aside class="side-panel">
+        <!-- Action Panel -->
+        <section class="action-panel" v-if="isMyTurn">
+          <h3 class="panel-title">您的回合</h3>
+          
+          <!-- Primary Actions -->
+          <div class="primary-actions">
+            <button class="action-btn fold-btn" @click="fold">
+              <span class="btn-label">FOLD</span>
+              <span class="btn-desc">弃牌</span>
+            </button>
+            
+            <button 
+              class="action-btn call-btn" 
+              @click="canCheck ? check() : call()"
+              :disabled="!canCheck && callAmount > currentPlayer?.chips"
+            >
+              <span class="btn-label">{{ canCheck ? 'CHECK' : 'CALL' }}</span>
+              <span class="btn-desc">
+                {{ canCheck ? '过牌' : `跟注 $${callAmount}` }}
+              </span>
+            </button>
+            
+            <button 
+              class="action-btn raise-btn" 
+              @click="bet"
+              :disabled="betAmount > currentPlayer?.chips"
+            >
+              <span class="btn-label">{{ gameState.currentBet > 0 ? 'RAISE' : 'BET' }}</span>
+              <span class="btn-desc">
+                {{ gameState.currentBet > 0 ? '加注' : '下注' }} ${{ betAmount }}
+              </span>
+            </button>
+          </div>
+          
+          <!-- Betting Slider -->
+          <div class="betting-controls">
+            <div class="slider-section">
+              <input 
+                type="range" 
+                v-model="betAmount" 
+                :min="minBet" 
+                :max="maxBet" 
+                :step="blinds.small"
+                class="bet-slider"
+              >
+              <div class="slider-labels">
+                <span class="min-label">${{ minBet }}</span>
+                <span class="current-label">${{ betAmount }}</span>
+                <span class="max-label">${{ maxBet }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Quick Bet Options -->
+          <div class="quick-bets">
+            <button 
+              class="quick-bet-btn" 
+              @click="setBetAmount(Math.floor(gameState.pot * 0.5))"
+              :disabled="Math.floor(gameState.pot * 0.5) > currentPlayer?.chips"
+            >
+              <span class="bet-type">1/2 POT</span>
+              <span class="bet-amount">${{ Math.floor(gameState.pot * 0.5) }}</span>
+            </button>
+            
+            <button 
+              class="quick-bet-btn" 
+              @click="setBetAmount(Math.floor(gameState.pot * 0.67))"
+              :disabled="Math.floor(gameState.pot * 0.67) > currentPlayer?.chips"
+            >
+              <span class="bet-type">2/3 POT</span>
+              <span class="bet-amount">${{ Math.floor(gameState.pot * 0.67) }}</span>
+            </button>
+            
+            <button 
+              class="quick-bet-btn" 
+              @click="setBetAmount(gameState.pot)"
+              :disabled="gameState.pot > currentPlayer?.chips"
+            >
+              <span class="bet-type">POT</span>
+              <span class="bet-amount">${{ gameState.pot }}</span>
+            </button>
+            
+            <button class="quick-bet-btn all-in-btn" @click="allIn">
+              <span class="bet-type">ALL-IN</span>
+              <span class="bet-amount">${{ currentPlayer?.chips || 0 }}</span>
+            </button>
+          </div>
+        </section>
+        
+        <!-- Game Log -->
+        <section class="game-log">
+          <h3 class="panel-title">游戏记录</h3>
+          <div class="log-container">
+            <div class="debug-section">
+              <h4 class="debug-title">状态信息</h4>
+              <div class="debug-grid">
+                <div class="debug-item">
+                  <span class="debug-label">连接</span>
+                  <span class="debug-value">{{ socket ? '已连接' : '未连接' }}</span>
+                </div>
+                <div class="debug-item">
+                  <span class="debug-label">阶段</span>
+                  <span class="debug-value">{{ gameState.phase }}</span>
+                </div>
+                <div class="debug-item">
+                  <span class="debug-label">玩家</span>
+                  <span class="debug-value">{{ players.length }}/6</span>
+                </div>
+                <div class="debug-item">
+                  <span class="debug-label">底池</span>
+                  <span class="debug-value">${{ gameState.pot }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="log-entries">
+              <div
+                v-for="(log, index) in gameLog"
+                :key="`log-${index}`"
+                class="log-entry"
+              >
+                <time class="log-time">{{ formatTime(log.time) }}</time>
+                <span class="log-message">{{ log.message }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </main>
+  </div>
+</template>

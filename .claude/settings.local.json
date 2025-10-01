@@ -6,7 +6,13 @@
       "Bash(git push:*)",
       "Bash(npm install)",
       "Bash(tree:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(test:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []

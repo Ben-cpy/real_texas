@@ -6,9 +6,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a full-stack Texas Hold'em poker game application with real-time multiplayer functionality. The project uses a frontend-backend separation architecture with Vue 3 and Node.js.
 
-## Development Commands
+## Quick Start
 
-### Backend (Node.js + Express)
+### Launch Services (Development)
+
+**Step 1: Start Backend Server**
+```bash
+cd backend
+npm install          # First time only
+npm run dev          # Backend runs on http://localhost:3001
+```
+
+**Step 2: Start Frontend Server**
+```bash
+cd frontend
+npm install          # First time only
+npm run dev          # Frontend runs on http://localhost:3000
+```
+
+**Access Application:**
+- **Primary**: http://localhost:3000
+- **Alternative (if using proxy like V2rayN)**: http://192.168.1.105:3000
+- **Backend API**: http://localhost:3001
+
+### Common Issues
+
+**Port 3000 Already in Use:**
+```bash
+# Check what's using port 3000
+netstat -ano | findstr :3000
+
+# Kill the process (replace PID with actual process ID)
+taskkill //PID <PID> //F
+```
+
+**V2rayN/Proxy Blocking Localhost:**
+- Add `localhost`, `127.0.0.1`, `192.168.1.0/24` to V2rayN bypass list
+- Or access via your local IP: http://192.168.1.105:3000
+
+### Development Commands
+
+#### Backend (Node.js + Express)
 ```bash
 cd backend
 npm install          # Install dependencies
@@ -19,11 +57,11 @@ npm run lint         # Run ESLint
 npm run format       # Format code with Prettier
 ```
 
-### Frontend (Vue 3 + Vite)
+#### Frontend (Vue 3 + Vite)
 ```bash
 cd frontend
 npm install          # Install dependencies
-npm run dev          # Start Vite development server
+npm run dev          # Start Vite development server (with --host 0.0.0.0)
 npm run build        # Build for production
 npm run preview      # Preview production build
 npm run lint         # Run ESLint with Vue plugin

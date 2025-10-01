@@ -1,51 +1,68 @@
- 🎮 项目启动指南
+🎮 Project Startup Guide
 
-  快速启动步骤：
+Quick Start Steps:
 
-  1. 安装后端依赖并启动后端服务：
-  cd backend
-  npm install
-  npm run dev
-  后端服务将运行在 http://localhost:3001
+1. Install backend dependencies and start the backend service:
+```bash
+cd backend
+npm install
+npm run dev
+```
+The backend service will run at http://localhost:3001
 
-  2. 安装前端依赖并启动前端服务（新终端窗口）：
-  cd frontend
-  npm install
-  npm run dev
-  前端服务将运行在 http://localhost:3000
+2. Install frontend dependencies and start the frontend service (in a new terminal window):
+```bash
+cd frontend
+npm install
+npm run dev
+```
+The frontend service will run at http://localhost:3000
 
-  3. 访问游戏：
-  打开浏览器访问 http://localhost:3000
+3. Access the game:
+- Main entry: http://localhost:3000
+- If using proxy tools like V2rayN: http://192.168.1.105:3000 (your local IP)
+- Backend API: http://localhost:3001
 
-  🔧 平台兼容性说明：
+⚠️ Common Issues:
 
-  Windows 开发环境（当前）：
-  - ✅ 使用 npm 包管理器
-  - ✅ 使用相对路径避免路径分隔符问题
-  - ✅ 环境变量配置文件 .env
+**Port 3000 in use:**
+```bash
+# Check port usage
+netstat -ano | findstr :3000
 
-  Linux 部署环境（未来）：
-  - ✅ Docker 容器化部署支持
-  - ✅ PM2 进程管理
-  - ✅ Nginx 反向代理配置
-  - ✅ 跨平台依赖包选择
+# Kill the process occupying the port (replace <PID> with actual process ID)
+taskkill //PID <PID> //F
+```
 
-  🚀 已完成的功能：
+🔧 Platform Compatibility:
 
-  1. 项目架构：前后端分离架构，Vue3 + Node.js
-  2. 用户系统：注册、登录、身份验证
-  3. 游戏界面：响应式德州扑克游戏界面
-  4. 实时通信：Socket.IO 支持多人在线游戏
-  5. 数据持久化：SQLite 数据库，支持用户数据和游戏记录
-  6. 完整的 API：RESTful API + WebSocket 事件
+Windows Development Environment (current):
+- ✅ Use npm package manager
+- ✅ Use relative paths to avoid path separator issues
+- ✅ Environment variable config file: .env
 
-  📁 项目文件结构：
+Linux Deployment Environment (future):
+- ✅ Docker container deployment supported
+- ✅ PM2 process management
+- ✅ Nginx reverse proxy configuration
+- ✅ Cross-platform dependency selection
 
-  true_texas/
-  ├── frontend/          # Vue3 前端应用
-  ├── backend/           # Node.js 后端服务
-  ├── TODO.md           # 详细开发计划
-  ├── README.md         # 完整启动说明
-  └── docker-compose.yml # Docker 部署配置
+🚀 Completed Features:
 
-  您现在就可以按照上述步骤启动项目了！游戏包含了完整的用户注册登录系统、游戏大厅、以及功能完整的德州扑克游戏界面。
+1. Project architecture: Frontend-backend separation, Vue3 + Node.js
+2. User system: Registration, login, authentication
+3. Game interface: Responsive Texas Hold'em UI
+4. Real-time communication: Socket.IO for multiplayer online gaming
+5. Data persistence: SQLite database for user data and game records
+6. Complete API: RESTful API + WebSocket events
+
+📁 Project File Structure:
+
+true_texas/
+├── frontend/          # Vue3 frontend app
+├── backend/           # Node.js backend service
+├── TODO.md            # Detailed development plan
+├── README.md          # Full startup instructions
+└── docker-compose.yml # Docker deployment config
+
+You can now start the project following the steps above! The game includes a complete user registration and login system, game lobby, and a fully functional Texas Hold'em interface.
