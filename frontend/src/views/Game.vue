@@ -33,6 +33,14 @@
           >
             添加AI
           </button>
+          <button
+            class="btn"
+            :class="soundEnabled ? 'btn-primary' : 'btn-secondary'"
+            @click="toggleSound"
+            title="切换音效"
+          >
+            {{ soundEnabled ? '🔊' : '🔇' }}
+          </button>
           <button class="btn btn-warning" @click="resetGame">重开</button>
           <button class="btn btn-danger" @click="leaveGame">离开</button>
         </div>
@@ -173,6 +181,28 @@
           </div>
         </section>
 
+        <!-- Chat Panel -->
+        <section class="chat-panel">
+          <h3 class="panel-title">聊天</h3>
+          <div class="chat-messages">
+            <div v-for="(msg, index) in chatMessages" :key="index" class="chat-message" :class="{ 'own-message': msg.userId === userStore.user?.id }">
+              <span class="chat-username">{{ msg.username }}:</span>
+              <span class="chat-text">{{ msg.message }}</span>
+            </div>
+          </div>
+          <div class="chat-input-container">
+            <input
+              v-model="chatInput"
+              @keyup.enter="sendChatMessage"
+              type="text"
+              placeholder="输入消息..."
+              class="chat-input"
+              maxlength="200"
+            />
+            <button @click="sendChatMessage" class="btn btn-primary chat-send-btn">发送</button>
+          </div>
+        </section>
+
         <!-- Game Log -->
         <section class="game-log">
           <h3 class="panel-title">游戏记录</h3>
@@ -194,6 +224,7 @@ import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/user'
 import { useGameStore } from '../stores/game'
 import socketService from '../services/socket'
+import soundService from '../services/sound'
 
 const router = useRouter()
 const route = useRoute()
@@ -205,6 +236,9 @@ const pokerTableRef = ref(null)
 const showRaiseDialog = ref(false)
 const raiseAmount = ref(0)
 const gameLogs = ref([])
+const chatMessages = ref([])
+const chatInput = ref('')
+const soundEnabled = ref(soundService.enabled)
 
 // Computed properties
 const canCheck = computed(() => gameStore.currentBet === 0)
@@ -260,46 +294,55 @@ const getActionText = (action) => {
 
 // Game actions
 const fold = () => {
+  soundService.playFold()
   gameStore.sendAction('fold')
   addLog('您选择了弃牌')
 }
 
 const check = () => {
+  soundService.playCheck()
   gameStore.sendAction('check')
   addLog('您选择了过牌')
 }
 
 const call = () => {
+  soundService.playCall()
   gameStore.sendAction('call')
   addLog(`您跟注 $${callAmount.value}`)
 }
 
 const raise = () => {
   if (raiseAmount.value < gameStore.minRaise) {
+    soundService.playError()
     ElMessage.error(`最小加注金额为 $${gameStore.minRaise}`)
     return
   }
+  soundService.playRaise()
   gameStore.sendAction('raise', raiseAmount.value)
   addLog(`您加注 $${raiseAmount.value}`)
   showRaiseDialog.value = false
 }
 
 const allIn = () => {
+  soundService.playAllIn()
   gameStore.sendAction('all_in')
   addLog('您选择了全下！')
 }
 
 const startGame = () => {
+  soundService.playGameStart()
   gameStore.startGame()
   addLog('游戏开始！')
 }
 
 const resetGame = () => {
+  soundService.playClick()
   gameStore.resetGame()
   addLog('游戏重置')
 }
 
 const addAI = () => {
+  soundService.playClick()
   gameStore.addAI()
   addLog('添加AI玩家')
 }
@@ -316,6 +359,22 @@ const addLog = (message) => {
   }
 }
 
+const sendChatMessage = () => {
+  if (!chatInput.value || chatInput.value.trim().length === 0) {
+    return
+  }
+  socketService.sendChatMessage(chatInput.value)
+  chatInput.value = ''
+}
+
+const toggleSound = () => {
+  soundEnabled.value = !soundEnabled.value
+  soundService.setEnabled(soundEnabled.value)
+  if (soundEnabled.value) {
+    soundService.playClick()
+  }
+}
+
 // Socket event handlers
 const setupSocketListeners = () => {
   // Log game events
@@ -323,10 +382,24 @@ const setupSocketListeners = () => {
     if (data.lastAction) {
       const action = data.lastAction
       addLog(`${action.playerName} ${getActionText(action.action)}${action.amount ? ` $${action.amount}` : ''}`)
+
+      // Play sound for actions
+      if (action.action === 'fold') soundService.playFold()
+      else if (action.action === 'check') soundService.playCheck()
+      else if (action.action === 'call') soundService.playCall()
+      else if (action.action === 'bet' || action.action === 'raise') soundService.playRaise()
+      else if (action.action === 'all_in') soundService.playAllIn()
+    }
+
+    // Check if it's the current player's turn
+    if (gameStore.isMyTurn) {
+      soundService.playYourTurn()
     }
   })
 
   socketService.on('game_started', () => {
+    soundService.playGameStart()
+    soundService.playCardDeal()
     addLog('游戏已开始！')
   })
 
@@ -334,25 +407,72 @@ const setupSocketListeners = () => {
     if (data.winners && data.winners.length > 0) {
       const winnerNames = data.winners.map(w => w.name).join(', ')
       addLog(`游戏结束！获胜者: ${winnerNames}`)
+
+      // Check if current user is the winner
+      const isWinner = data.winners.some(w => w.id === userStore.user?.id)
+      if (isWinner) {
+        soundService.playWin()
+      } else {
+        soundService.playLose()
+      }
     }
   })
 
   socketService.on('player_joined', (data) => {
+    soundService.playNotification()
     addLog(`${data.player.name} 加入了游戏`)
   })
 
   socketService.on('player_left', (data) => {
+    soundService.playNotification()
     addLog(`${data.player.name} 离开了游戏`)
   })
 
   socketService.on('action_error', (data) => {
+    soundService.playError()
     ElMessage.error(data.error)
     addLog(`错误: ${data.error}`)
   })
 
   socketService.on('error', (data) => {
+    soundService.playError()
     ElMessage.error(data.error)
     addLog(`错误: ${data.error}`)
+  })
+
+  socketService.on('chat_message', (data) => {
+    chatMessages.value.push({
+      userId: data.userId,
+      username: data.username,
+      message: data.message,
+      timestamp: data.timestamp
+    })
+    // Keep only last 50 messages
+    if (chatMessages.value.length > 50) {
+      chatMessages.value.shift()
+    }
+  })
+
+  socketService.on('achievements_unlocked', (data) => {
+    if (data.playerId === userStore.user?.id) {
+      // Play success sound
+      soundService.playSuccess()
+
+      // Show achievement notifications
+      data.achievements.forEach((achievement, index) => {
+        setTimeout(() => {
+          ElMessage.success({
+            message: `🎉 成就解锁！${achievement.icon} ${achievement.name}\n${achievement.description}\n奖励: ${achievement.reward} 筹码`,
+            duration: 5000,
+            showClose: true
+          })
+          addLog(`解锁成就: ${achievement.name} (+${achievement.reward} 筹码)`)
+        }, index * 1000)
+      })
+    } else {
+      // Another player unlocked achievement
+      addLog(`玩家解锁了 ${data.achievements.length} 个成就`)
+    }
   })
 }
 
@@ -395,6 +515,9 @@ onBeforeUnmount(() => {
   gameStore.cleanup()
   gameStore.leaveRoom()
 })
+</script>
+
+<style scoped>
 /* Import CSS Custom Properties */
 .game {
   min-height: 100vh;
@@ -1424,6 +1547,101 @@ onBeforeUnmount(() => {
   background: linear-gradient(135deg, #059669 0%, #047857 100%);
   transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+}
+
+/* Chat Panel */
+.chat-panel {
+  background: var(--color-surface);
+  backdrop-filter: blur(20px);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: var(--space-sm);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 3px;
+  transition: background var(--transition-base);
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+.chat-message {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--border-radius-sm);
+  background: rgba(30, 41, 59, 0.3);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  font-size: var(--font-size-sm);
+  word-wrap: break-word;
+}
+
+.chat-message.own-message {
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.chat-username {
+  color: var(--color-warning);
+  font-weight: 600;
+  margin-right: var(--space-xs);
+}
+
+.chat-text {
+  color: var(--color-text-primary);
+}
+
+.chat-input-container {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.chat-input {
+  flex: 1;
+  padding: var(--space-sm);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  transition: all var(--transition-base);
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.chat-send-btn {
+  padding: var(--space-sm) var(--space-md);
+  white-space: nowrap;
 }
 
 /* Game Log */

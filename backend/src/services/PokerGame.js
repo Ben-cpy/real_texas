@@ -285,26 +285,136 @@ export class PokerGame {
     return actionResult
   }
 
-  // 简单AI策略
+  // 改进的AI策略
   getAIAction(player) {
     const callAmount = this.currentBet - player.currentBet
     const random = Math.random()
-    
+
     // 如果没钱了，只能弃牌或全押
     if (player.chips <= callAmount) {
-      return random < 0.4 ? { action: 'fold' } : { action: 'all_in' }
+      const handStrength = this.calculateHandStrength(player)
+      return handStrength > 0.5 ? { action: 'all_in' } : { action: 'fold' }
     }
-    
+
+    // 计算手牌强度
+    const handStrength = this.calculateHandStrength(player)
+    const potOdds = callAmount / (this.pot + callAmount)
+    const position = this.getPlayerPosition(player)
+
     // 如果不需要跟注（可以过牌）
     if (callAmount === 0) {
-      if (random < 0.8) return { action: 'check' }
-      return { action: 'bet', amount: this.bigBlind }
+      // 强牌：加注
+      if (handStrength > 0.7) {
+        const raiseAmount = Math.floor(this.pot * (0.5 + random * 0.5))
+        return { action: 'bet', amount: Math.min(raiseAmount, player.chips) }
+      }
+      // 中等牌：有时加注，有时过牌
+      if (handStrength > 0.4) {
+        if (random < 0.3) {
+          return { action: 'bet', amount: this.bigBlind }
+        }
+        return { action: 'check' }
+      }
+      // 弱牌：过牌
+      return { action: 'check' }
     }
-    
+
     // 需要跟注的情况
-    if (random < 0.3) return { action: 'fold' }      // 30% 弃牌
-    if (random < 0.9) return { action: 'call' }      // 60% 跟注  
-    return { action: 'call' }                        // 10% 跟注（简化逻辑）
+    // 强牌：加注
+    if (handStrength > 0.75) {
+      if (random < 0.7) {
+        const raiseAmount = Math.floor(this.currentBet * 2 + this.pot * 0.3)
+        return { action: 'bet', amount: Math.min(raiseAmount, player.chips) }
+      }
+      return { action: 'call' }
+    }
+
+    // 中等牌：根据赔率决定
+    if (handStrength > 0.5) {
+      if (potOdds < handStrength - 0.1) {
+        return { action: 'call' }
+      }
+      return random < 0.6 ? { action: 'call' } : { action: 'fold' }
+    }
+
+    // 中下牌：谨慎跟注
+    if (handStrength > 0.3) {
+      if (callAmount <= this.bigBlind * 2 && random < 0.5) {
+        return { action: 'call' }
+      }
+      return { action: 'fold' }
+    }
+
+    // 弱牌：大多数情况弃牌，偶尔诈唬
+    if (position === 'late' && random < 0.15) {
+      // 后位偶尔诈唬
+      return { action: 'call' }
+    }
+
+    return { action: 'fold' }
+  }
+
+  // 计算手牌强度（0-1之间，1最强）
+  calculateHandStrength(player) {
+    if (!player.cards || player.cards.length === 0) {
+      return 0
+    }
+
+    // 使用当前可见的牌评估手牌
+    const allCards = player.cards.concat(this.communityCards)
+    const handRank = this.evaluateHand(allCards)
+
+    // 根据牌型等级返回强度
+    // 9: 同花顺, 8: 四条, 7: 葫芦, 6: 同花, 5: 顺子, 4: 三条, 3: 两对, 2: 一对, 1: 高牌
+    const rankToStrength = {
+      9: 0.95 + Math.random() * 0.05,  // 同花顺: 0.95-1.0
+      8: 0.90 + Math.random() * 0.05,  // 四条: 0.90-0.95
+      7: 0.80 + Math.random() * 0.10,  // 葫芦: 0.80-0.90
+      6: 0.70 + Math.random() * 0.10,  // 同花: 0.70-0.80
+      5: 0.60 + Math.random() * 0.10,  // 顺子: 0.60-0.70
+      4: 0.50 + Math.random() * 0.10,  // 三条: 0.50-0.60
+      3: 0.40 + Math.random() * 0.10,  // 两对: 0.40-0.50
+      2: 0.25 + Math.random() * 0.15,  // 一对: 0.25-0.40
+      1: 0.10 + Math.random() * 0.15   // 高牌: 0.10-0.25
+    }
+
+    let strength = rankToStrength[handRank.rank] || 0.2
+
+    // preflop阶段，只看手牌
+    if (this.communityCards.length === 0) {
+      const [card1, card2] = player.cards
+      // 对子
+      if (card1.value === card2.value) {
+        if (card1.value >= 10) strength = 0.8 + Math.random() * 0.1  // 大对子
+        else if (card1.value >= 7) strength = 0.6 + Math.random() * 0.15
+        else strength = 0.4 + Math.random() * 0.15
+      }
+      // 高牌
+      else if (card1.value >= 12 || card2.value >= 12) {
+        strength = 0.5 + Math.random() * 0.2
+      }
+      // 同花
+      else if (card1.suit === card2.suit) {
+        strength += 0.1
+      }
+      // 连牌
+      else if (Math.abs(card1.value - card2.value) === 1) {
+        strength += 0.05
+      }
+    }
+
+    return Math.min(strength, 1.0)
+  }
+
+  // 获取玩家位置（早/中/晚）
+  getPlayerPosition(player) {
+    const playerIndex = this.players.findIndex(p => p.id === player.id)
+    const positionFromDealer = (playerIndex - this.dealerIndex + this.players.length) % this.players.length
+    const activePlayers = this.players.filter(p => p.active && !p.folded).length
+
+    if (positionFromDealer <= activePlayers / 3) return 'early'
+    if (positionFromDealer <= activePlayers * 2 / 3) return 'middle'
+    return 'late'
   }
 
   // 处理AI行动

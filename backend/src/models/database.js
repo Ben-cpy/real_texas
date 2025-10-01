@@ -113,6 +113,17 @@ class Database {
       await this.run(indexSQL)
     }
 
+    // Add achievements column if it doesn't exist (migration)
+    try {
+      await this.run(`ALTER TABLE users ADD COLUMN achievements TEXT DEFAULT '[]'`)
+      console.log('添加成就列成功')
+    } catch (error) {
+      // Column already exists, ignore error
+      if (!error.message.includes('duplicate column')) {
+        console.error('添加成就列错误:', error.message)
+      }
+    }
+
     console.log('数据库表初始化完成')
   }
 

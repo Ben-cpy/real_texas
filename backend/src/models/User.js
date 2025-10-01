@@ -113,7 +113,55 @@ export class User {
       winRate: user.games_played > 0 ? Math.round((user.games_won / user.games_played) * 100) : 0,
       chips: user.chips,
       totalChipsWon: user.total_chips_won || 0,
-      totalChipsLost: user.total_chips_lost || 0
+      totalChipsLost: user.total_chips_lost || 0,
+      chipsWon: user.total_chips_won || 0,
+      chipsLost: user.total_chips_lost || 0
     }
+  }
+
+  // 获取用户成就
+  static async getAchievements(id) {
+    const user = await this.findById(id)
+    if (!user) return []
+
+    try {
+      return user.achievements ? JSON.parse(user.achievements) : []
+    } catch (error) {
+      console.error('Error parsing achievements:', error)
+      return []
+    }
+  }
+
+  // 添加成就
+  static async addAchievement(id, achievementId) {
+    const achievements = await this.getAchievements(id)
+
+    if (achievements.includes(achievementId)) {
+      return achievements
+    }
+
+    achievements.push(achievementId)
+
+    const sql = `
+      UPDATE users
+      SET achievements = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `
+    await database.run(sql, [JSON.stringify(achievements), id])
+    return achievements
+  }
+
+  // 批量添加成就
+  static async addAchievements(id, achievementIds) {
+    const currentAchievements = await this.getAchievements(id)
+    const newAchievements = [...new Set([...currentAchievements, ...achievementIds])]
+
+    const sql = `
+      UPDATE users
+      SET achievements = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `
+    await database.run(sql, [JSON.stringify(newAchievements), id])
+    return newAchievements
   }
 }

@@ -171,6 +171,24 @@ class SocketService {
   }
 
   /**
+   * Send chat message to room
+   * @param {string} message - Chat message content
+   */
+  sendChatMessage(message) {
+    if (!this.isAuthenticated) {
+      console.error('Cannot send chat message: not authenticated')
+      return
+    }
+
+    if (!message || message.trim().length === 0) {
+      return
+    }
+
+    console.log('Sending chat message:', message)
+    this.socket.emit('send_chat_message', { message })
+  }
+
+  /**
    * Listen for server events
    * @param {string} event - Event name
    * @param {Function} callback - Event handler

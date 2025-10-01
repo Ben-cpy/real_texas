@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken'
 import { User } from '../models/User.js'
 import { GameRoom } from '../models/GameRoom.js'
 import { PokerGame } from '../services/PokerGame.js'
+import { checkAchievements, ACHIEVEMENTS } from '../services/achievements.js'
 
 // 存储活跃的游戏房间
 const activeRooms = new Map()
@@ -255,7 +256,7 @@ export const handleSocketConnection = (socket, io) => {
       game.currentPlayerIndex = 0
       game.communityCards = []
       game.actionHistory = []
-      
+
       // 重置玩家状态
       game.players.forEach(player => {
         player.cards = []
@@ -281,6 +282,38 @@ export const handleSocketConnection = (socket, io) => {
     } catch (error) {
       console.error('重开游戏错误:', error)
       socket.emit('error', { error: '重开游戏失败' })
+    }
+  })
+
+  // 聊天消息
+  socket.on('send_chat_message', async (data) => {
+    try {
+      if (!socket.userId || !socket.currentRoomId) {
+        socket.emit('error', { error: '请先加入房间' })
+        return
+      }
+
+      const { message } = data
+      if (!message || message.trim().length === 0) {
+        return
+      }
+
+      // 消息长度限制
+      const trimmedMessage = message.trim().substring(0, 200)
+
+      // 广播聊天消息到房间内所有玩家
+      io.to(socket.currentRoomId).emit('chat_message', {
+        userId: socket.userId,
+        username: socket.username,
+        message: trimmedMessage,
+        timestamp: Date.now()
+      })
+
+      console.log(`聊天消息 [${socket.currentRoomId}] ${socket.username}: ${trimmedMessage}`)
+
+    } catch (error) {
+      console.error('发送聊天消息错误:', error)
+      socket.emit('error', { error: '发送消息失败' })
     }
   })
 
@@ -382,8 +415,10 @@ const processAIActions = async (game, roomId, io) => {
 const handleGameFinish = async (game, roomId, io) => {
   try {
     const results = game.getGameResults()
-    
+
     // 更新玩家筹码和统计数据 (只更新真实玩家，跳过AI)
+    const playerAchievements = {}
+
     for (const player of results.players) {
       if (!player.isAI) {
         await User.updateChips(player.id, player.finalChips)
@@ -393,6 +428,26 @@ const handleGameFinish = async (game, roomId, io) => {
           chipsWon: Math.max(0, player.chipsChange),
           chipsLost: Math.max(0, -player.chipsChange)
         })
+
+        // 检查成就
+        const userStats = await User.getStats(player.id)
+        const userAchievements = await User.getAchievements(player.id)
+        const newAchievements = checkAchievements(userStats, userAchievements)
+
+        if (newAchievements.length > 0) {
+          // 添加新成就
+          const achievementIds = newAchievements.map(a => a.id)
+          await User.addAchievements(player.id, achievementIds)
+
+          // 计算并添加成就奖励
+          const totalReward = newAchievements.reduce((sum, a) => sum + a.reward, 0)
+          if (totalReward > 0) {
+            const updatedUser = await User.findById(player.id)
+            await User.updateChips(player.id, updatedUser.chips + totalReward)
+          }
+
+          playerAchievements[player.id] = newAchievements
+        }
       }
     }
 
@@ -406,9 +461,23 @@ const handleGameFinish = async (game, roomId, io) => {
       pot: results.pot
     })
 
+    // 广播成就解锁
+    for (const [playerId, achievements] of Object.entries(playerAchievements)) {
+      io.to(roomId).emit('achievements_unlocked', {
+        playerId,
+        achievements: achievements.map(a => ({
+          id: a.id,
+          name: a.name,
+          description: a.description,
+          icon: a.icon,
+          reward: a.reward
+        }))
+      })
+    }
+
     // 清理游戏实例
     activeRooms.delete(roomId)
-    
+
     console.log(`游戏结束: 房间 ${roomId}, 获胜者: ${results.winner.name}`)
 
   } catch (error) {
