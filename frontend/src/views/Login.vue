@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="login">
     <div class="login-container">
       <div class="login-card card">
@@ -260,26 +260,26 @@ const register = async () => {
   text-decoration: underline;
 }
 
-:deep(.el-input__inner) {
+.login-card :deep(.el-input__inner) {
   background-color: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: #fff;
 }
 
-:deep(.el-input__inner::placeholder) {
+.login-card :deep(.el-input__inner::placeholder) {
   color: #ccc;
 }
 
-:deep(.el-input__prefix) {
+.login-card :deep(.el-input__prefix) {
   color: #ccc;
 }
 
-:deep(.el-button--primary) {
+.login-card :deep(.el-button--primary) {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
 }
 
-:deep(.el-button--primary:hover) {
+.login-card :deep(.el-button--primary:hover) {
   background: linear-gradient(135deg, #7b8af0 0%, #8558b8 100%);
 }
 </style>

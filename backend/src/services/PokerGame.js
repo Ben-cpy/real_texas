@@ -63,6 +63,7 @@ export class PokerGame {
     this.smallBlind = options.smallBlind || 10
     this.bigBlind = options.bigBlind || 20
     this.maxPlayers = options.maxPlayers || 6
+    this.desiredSeatCount = Math.min(this.maxPlayers, Math.max(3, options.desiredSeatCount || this.maxPlayers))
     
     this.players = []
     this.deck = new Deck()
@@ -108,14 +109,69 @@ export class PokerGame {
   // 添加AI玩家
   addAIPlayer() {
     const aiId = `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const aiIndex = this.players.filter(player => player.isAI).length + 1
     const aiPlayer = {
       id: aiId,
-      name: `AI玩家${this.players.length + 1}`,
+      name: `AI玩家${aiIndex}`,
       chips: 1000,
       socketId: null,
       isAI: true
     }
     return this.addPlayer(aiPlayer)
+  }
+
+  // 移除AI玩家
+  removeAIPlayer() {
+    for (let i = this.players.length - 1; i >= 0; i--) {
+      if (this.players[i].isAI) {
+        this.players.splice(i, 1)
+        return true
+      }
+    }
+    return false
+  }
+
+  // 统计真实玩家数量
+  countRealPlayers() {
+    return this.players.filter(player => !player.isAI).length
+  }
+
+  // 设置目标玩家数
+  setDesiredSeatCount(count) {
+    const realPlayers = this.countRealPlayers()
+    const sanitizedCount = Math.max(realPlayers, Math.max(3, Math.min(this.maxPlayers, count)))
+    this.desiredSeatCount = sanitizedCount
+    if (!this.gameStarted) {
+      this.syncAIPlayers()
+    }
+    return {
+      success: true,
+      desiredSeatCount: this.desiredSeatCount
+    }
+  }
+
+  // 根据目标玩家数同步AI
+  syncAIPlayers() {
+    if (this.gameStarted) {
+      return
+    }
+
+    const realPlayers = this.countRealPlayers()
+    const targetTotal = Math.max(realPlayers, Math.min(this.desiredSeatCount, this.maxPlayers))
+
+    while (this.players.length > targetTotal) {
+      if (!this.removeAIPlayer()) {
+        break
+      }
+    }
+
+    let safety = 0
+    while (this.players.length < targetTotal && safety < 10) {
+      if (!this.addAIPlayer()) {
+        break
+      }
+      safety += 1
+    }
   }
 
   // 获取玩家数量
@@ -745,11 +801,13 @@ export class PokerGame {
         folded: player.folded,
         allIn: player.allIn,
         active: player.active,
+        isAI: player.isAI || false,
         cards: player.cards.map(card => ({
           suit: card.suit,
           rank: card.rank
         }))
       })),
+      desiredSeatCount: this.desiredSeatCount,
       gameStarted: this.gameStarted,
       gameFinished: this.gameFinished
     }
@@ -761,7 +819,8 @@ export class PokerGame {
       id: player.id,
       name: player.name,
       chips: player.chips,
-      active: player.active
+      active: player.active,
+      isAI: player.isAI || false
     }))
   }
 

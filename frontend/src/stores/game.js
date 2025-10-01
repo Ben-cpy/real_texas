@@ -17,6 +17,7 @@ export const useGameStore = defineStore('game', () => {
   const dealerIndex = ref(0)
   const smallBlind = ref(10)
   const bigBlind = ref(20)
+  const desiredSeatCount = ref(6)
   const winners = ref([])
   const lastAction = ref(null)
   const isConnected = ref(false)
@@ -50,16 +51,20 @@ export const useGameStore = defineStore('game', () => {
   })
 
   const canStartGame = computed(() => {
+    const minimumSeats = Math.max(3, players.value.filter((p) => !p.isAI).length)
     return (
       isRoomCreator.value &&
       gamePhase.value === 'waiting' &&
-      players.value.length >= 2
+      players.value.length >= minimumSeats
     )
   })
 
   const activePlayers = computed(() => {
     return players.value.filter((p) => !p.folded && !p.allIn)
   })
+
+  const realPlayerCount = computed(() => players.value.filter((p) => !p.isAI).length)
+  const aiPlayerCount = computed(() => players.value.filter((p) => p.isAI).length)
 
   const totalPot = computed(() => {
     return pot.value + players.value.reduce((sum, p) => sum + (p.currentBet || 0), 0)
@@ -92,6 +97,8 @@ export const useGameStore = defineStore('game', () => {
     // Game event listeners
     socketService.on('player_joined', handlePlayerJoined)
     socketService.on('player_left', handlePlayerLeft)
+    socketService.on('player_list_updated', handlePlayerListUpdated)
+    socketService.on('ai_count_updated', handleAICountUpdated)
     socketService.on('game_update', handleGameUpdate)
     socketService.on('game_started', handleGameStarted)
     socketService.on('game_finished', handleGameFinished)
@@ -148,6 +155,14 @@ export const useGameStore = defineStore('game', () => {
     socketService.addAI()
   }
 
+  function setAICount(totalPlayers) {
+    socketService.setAICount(totalPlayers)
+  }
+
+  function removeAI() {
+    socketService.removeAI()
+  }
+
   // Event Handlers
 
   function handlePlayerJoined(data) {
@@ -164,6 +179,24 @@ export const useGameStore = defineStore('game', () => {
     players.value = data.players || []
     if (data.gameState) {
       updateGameState(data.gameState)
+    }
+  }
+
+  function handlePlayerListUpdated(data) {
+    if (data && Array.isArray(data.players)) {
+      players.value = data.players
+    }
+    if (data && typeof data.desiredSeatCount === 'number') {
+      desiredSeatCount.value = data.desiredSeatCount
+    }
+    if (data && data.phase) {
+      gamePhase.value = data.phase
+    }
+  }
+
+  function handleAICountUpdated(data) {
+    if (data && typeof data.desiredSeatCount === 'number') {
+      desiredSeatCount.value = data.desiredSeatCount
     }
   }
 
@@ -218,6 +251,7 @@ export const useGameStore = defineStore('game', () => {
     if (state.dealerIndex !== undefined) dealerIndex.value = state.dealerIndex
     if (state.smallBlind !== undefined) smallBlind.value = state.smallBlind
     if (state.bigBlind !== undefined) bigBlind.value = state.bigBlind
+    if (state.desiredSeatCount !== undefined) desiredSeatCount.value = state.desiredSeatCount
   }
 
   /**
@@ -238,6 +272,7 @@ export const useGameStore = defineStore('game', () => {
     winners.value = []
     lastAction.value = null
     error.value = null
+    desiredSeatCount.value = 6
   }
 
   /**
@@ -256,6 +291,8 @@ export const useGameStore = defineStore('game', () => {
     socketService.off('auth_error')
     socketService.off('player_joined', handlePlayerJoined)
     socketService.off('player_left', handlePlayerLeft)
+    socketService.off('player_list_updated', handlePlayerListUpdated)
+    socketService.off('ai_count_updated', handleAICountUpdated)
     socketService.off('game_update', handleGameUpdate)
     socketService.off('game_started', handleGameStarted)
     socketService.off('game_finished', handleGameFinished)
@@ -278,6 +315,7 @@ export const useGameStore = defineStore('game', () => {
     dealerIndex,
     smallBlind,
     bigBlind,
+    desiredSeatCount,
     winners,
     lastAction,
     isConnected,
@@ -289,6 +327,8 @@ export const useGameStore = defineStore('game', () => {
     isRoomCreator,
     canStartGame,
     activePlayers,
+    realPlayerCount,
+    aiPlayerCount,
     totalPot,
     // Actions
     initSocket,
@@ -298,6 +338,8 @@ export const useGameStore = defineStore('game', () => {
     startGame,
     resetGame,
     addAI,
+    setAICount,
+    removeAI,
     updateGameState,
     resetGameState,
     clearError,

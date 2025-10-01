@@ -170,6 +170,24 @@ class SocketService {
     this.socket.emit('add_ai')
   }
 
+  setAICount(totalPlayers) {
+    if (!this.isAuthenticated) {
+      console.error('Cannot set AI count: not authenticated')
+      return
+    }
+
+    this.socket.emit('set_ai_count', { totalPlayers })
+  }
+
+  removeAI() {
+    if (!this.isAuthenticated) {
+      console.error('Cannot remove AI: not authenticated')
+      return
+    }
+
+    this.socket.emit('remove_ai')
+  }
+
   /**
    * Send chat message to room
    * @param {string} message - Chat message content

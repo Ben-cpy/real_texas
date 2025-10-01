@@ -7,6 +7,7 @@
         <div class="room-details">
           <span class="room-id">房间: {{ gameStore.roomId || 'N/A' }}</span>
           <span class="blinds">底注: ${{ gameStore.smallBlind }}/${{ gameStore.bigBlind }}</span>
+          <span class="seats">座位: {{ gameStore.players.length }}/{{ gameStore.desiredSeatCount }}</span>
         </div>
       </div>
       <div class="user-controls">
@@ -15,24 +16,43 @@
           <span v-if="gameStore.isRoomCreator" class="user-role">房主</span>
         </div>
         <div class="control-buttons">
+          <div
+            v-if="gameStore.isRoomCreator && gameStore.gamePhase === 'waiting'"
+            class="player-seat-controls"
+          >
+            <button
+              class="btn btn-secondary"
+              @click="decreaseSeats"
+              :disabled="seatDecreaseDisabled"
+              title="减少座位"
+            >
+              -
+            </button>
+            <span class="seat-count">座位 {{ gameStore.desiredSeatCount }}</span>
+            <span class="ai-count">AI {{ aiPlayerCount }}</span>
+            <button
+              class="btn btn-secondary"
+              @click="increaseSeats"
+              :disabled="seatIncreaseDisabled"
+              title="增加座位"
+            >
+              +
+            </button>
+          </div>
           <button
             v-if="gameStore.gamePhase === 'waiting' && gameStore.isRoomCreator"
             class="btn btn-success"
             @click="startGame"
-            :disabled="gameStore.players.length < 2"
+            :disabled="!gameStore.canStartGame"
           >
-            开始游戏 ({{ gameStore.players.length }}/6)
+            开始游戏 ({{ gameStore.players.length }}/{{ gameStore.desiredSeatCount }})
           </button>
-          <span v-if="gameStore.gamePhase === 'waiting' && !gameStore.isRoomCreator" class="waiting-status">
-            等待房主开始...
+          <span
+            v-if="gameStore.gamePhase === 'waiting' && !gameStore.isRoomCreator"
+            class="waiting-status"
+          >
+            等待房主开始…
           </span>
-          <button
-            v-if="gameStore.gamePhase !== 'waiting'"
-            class="btn btn-secondary"
-            @click="addAI"
-          >
-            添加AI
-          </button>
           <button
             class="btn"
             :class="soundEnabled ? 'btn-primary' : 'btn-secondary'"
@@ -231,6 +251,9 @@ const route = useRoute()
 const userStore = useUserStore()
 const gameStore = useGameStore()
 
+const MAX_SEATS = 6
+const MIN_SEATS = 3
+
 // UI state
 const pokerTableRef = ref(null)
 const showRaiseDialog = ref(false)
@@ -246,6 +269,13 @@ const callAmount = computed(() => {
   if (!gameStore.myPlayer) return 0
   return gameStore.currentBet - (gameStore.myPlayer.currentBet || 0)
 })
+
+const aiPlayerCount = computed(() => gameStore.aiPlayerCount)
+const seatDecreaseDisabled = computed(() => {
+  const minimumSeats = Math.max(MIN_SEATS, gameStore.realPlayerCount)
+  return gameStore.desiredSeatCount <= minimumSeats
+})
+const seatIncreaseDisabled = computed(() => gameStore.desiredSeatCount >= MAX_SEATS)
 
 // Methods
 const getPlayerPosition = (index) => {
@@ -341,12 +371,6 @@ const resetGame = () => {
   addLog('游戏重置')
 }
 
-const addAI = () => {
-  soundService.playClick()
-  gameStore.addAI()
-  addLog('添加AI玩家')
-}
-
 const leaveGame = () => {
   gameStore.leaveRoom()
   router.push('/')
@@ -373,6 +397,26 @@ const toggleSound = () => {
   if (soundEnabled.value) {
     soundService.playClick()
   }
+}
+
+const increaseSeats = () => {
+  if (seatIncreaseDisabled.value) {
+    return
+  }
+
+  soundService.playClick()
+  gameStore.setAICount(Math.min(gameStore.desiredSeatCount + 1, MAX_SEATS))
+}
+
+const decreaseSeats = () => {
+  const minimumSeats = Math.max(MIN_SEATS, gameStore.realPlayerCount)
+  if (seatDecreaseDisabled.value) {
+    return
+  }
+
+  soundService.playClick()
+  const target = Math.max(minimumSeats, gameStore.desiredSeatCount - 1)
+  gameStore.setAICount(target)
 }
 
 // Socket event handlers
@@ -1867,6 +1911,32 @@ onBeforeUnmount(() => {
     align-items: stretch;
   }
   
+  .seats {
+    font-weight: 500;
+  }
+
+  .player-seat-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-right: var(--space-sm);
+  }
+
+  .player-seat-controls .seat-count,
+  .player-seat-controls .ai-count {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
+
+  .player-seat-controls .seat-count {
+    min-width: 88px;
+  }
+
+  .player-seat-controls .ai-count {
+    min-width: 64px;
+    text-align: center;
+  }
+
   .user-controls {
     align-items: stretch;
   }

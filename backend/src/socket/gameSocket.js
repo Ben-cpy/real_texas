@@ -7,6 +7,84 @@ import { checkAchievements, ACHIEVEMENTS } from '../services/achievements.js'
 // 存储活跃的游戏房间
 const activeRooms = new Map()
 
+const broadcastPlayerList = (io, roomId, game) => {
+  if (!io) {
+    return
+  }
+
+  if (!game) {
+    io.to(roomId).emit('player_list_updated', {
+      players: [],
+      desiredSeatCount: 0,
+      phase: 'waiting'
+    })
+    return
+  }
+
+  const gameState = game.getGameState()
+  io.to(roomId).emit('player_list_updated', {
+    players: gameState.players,
+    desiredSeatCount: game.desiredSeatCount || gameState.players.length,
+    phase: gameState.phase
+  })
+}
+
+const updateSeatCount = async (socket, io, computeDesired) => {
+  if (!socket.userId || !socket.currentRoomId) {
+    socket.emit('error', { error: '无效的游戏状态' })
+    return null
+  }
+
+  const roomId = socket.currentRoomId
+  const game = activeRooms.get(roomId)
+
+  if (!game) {
+    socket.emit('error', { error: '游戏不存在' })
+    return null
+  }
+
+  if (game.gameStarted) {
+    socket.emit('error', { error: '游戏进行中无法调整座位' })
+    return null
+  }
+
+  if (typeof game.setDesiredSeatCount !== 'function') {
+    socket.emit('error', { error: '当前模式不支持调整玩家数量' })
+    return null
+  }
+
+  const room = await GameRoom.findById(roomId)
+  if (room.creator_id !== socket.userId) {
+    socket.emit('error', { error: '只有房主可以调整玩家数量' })
+    return null
+  }
+
+  const currentSeatTarget = typeof game.desiredSeatCount === 'number'
+    ? game.desiredSeatCount
+    : game.getPlayers().length
+
+  let desiredSeatCount = computeDesired(currentSeatTarget, game)
+  if (typeof desiredSeatCount !== 'number' || Number.isNaN(desiredSeatCount)) {
+    socket.emit('error', { error: '无效的玩家数量' })
+    return null
+  }
+
+  desiredSeatCount = Math.round(desiredSeatCount)
+
+  const result = game.setDesiredSeatCount(desiredSeatCount)
+
+  await GameRoom.updatePlayers(roomId, game.getPlayers())
+  await GameRoom.updateGameState(roomId, game.getGameState())
+
+  socket.emit('ai_count_updated', {
+    desiredSeatCount: result.desiredSeatCount
+  })
+  broadcastPlayerList(io, roomId, game)
+
+  return result.desiredSeatCount
+}
+
+
 export const handleSocketConnection = (socket, io) => {
   console.log(`Socket连接: ${socket.id}`)
 
@@ -71,14 +149,22 @@ export const handleSocketConnection = (socket, io) => {
       }
 
       // 获取或创建游戏实例
+      const isSinglePlayerRoom = roomId === 'default-room'
+      const maxSeatLimit = room.max_players || 6
+
+      // 获取或创建游戏实例
       let game = activeRooms.get(roomId)
       if (!game) {
         game = new PokerGame(roomId, {
           smallBlind: room.small_blind,
           bigBlind: room.big_blind,
-          maxPlayers: room.max_players
+          maxPlayers: room.max_players,
+          desiredSeatCount: isSinglePlayerRoom ? Math.min(maxSeatLimit, 6) : Math.max(3, Math.min(maxSeatLimit, 6))
         })
+        game.singlePlayerMode = isSinglePlayerRoom
         activeRooms.set(roomId, game)
+      } else if (isSinglePlayerRoom) {
+        game.singlePlayerMode = true
       }
 
       // 添加玩家到游戏
@@ -95,31 +181,26 @@ export const handleSocketConnection = (socket, io) => {
         return
       }
 
-      // 检查是否需要更新房主（如果当前玩家是唯一的真实玩家）
-      const realPlayers = game.getPlayers().filter(p => !p.isAI)
+      const currentPlayers = game.getPlayers()
+      const realPlayers = currentPlayers.filter(p => !p.isAI)
+
       if (realPlayers.length === 1 && realPlayers[0].id === user.id) {
-        // 更新房间的创建者为当前玩家
         await GameRoom.updateCreator(roomId, user.id)
         console.log(`更新房间 ${roomId} 的房主为: ${user.username}`)
       }
 
-      // 如果是第一个玩家，自动添加AI玩家便于测试
-      if (game.getPlayerCount() === 1) {
-        game.addAIPlayer()
-        console.log(`自动添加AI玩家到房间 ${roomId}`)
+      if (isSinglePlayerRoom && typeof game.setDesiredSeatCount === 'function' && !game.gameStarted) {
+        game.setDesiredSeatCount(Math.min(game.maxPlayers || 6, 6))
       }
 
-      // 加入Socket房间
       socket.join(roomId)
       socket.currentRoomId = roomId
 
-      // 更新数据库中的房间玩家信息
       await GameRoom.updatePlayers(roomId, game.getPlayers())
+      await GameRoom.updateGameState(roomId, game.getGameState())
 
-      // 获取最新的房间信息（包含更新后的创建者）
       const updatedRoom = await GameRoom.findById(roomId)
 
-      // 通知房间内所有玩家
       io.to(roomId).emit('player_joined', {
         player: {
           id: user.id,
@@ -130,6 +211,8 @@ export const handleSocketConnection = (socket, io) => {
         gameState: game.getGameState(),
         roomCreatorId: updatedRoom.creator_id
       })
+
+      broadcastPlayerList(io, roomId, game)
 
       console.log(`玩家 ${user.username} 加入房间 ${roomId}`)
 
@@ -285,6 +368,31 @@ export const handleSocketConnection = (socket, io) => {
     }
   })
 
+  socket.on('set_ai_count', async (data) => {
+    const requested = parseInt(
+      data?.totalPlayers ?? data?.desiredSeatCount ?? data?.count,
+      10
+    )
+    const updated = await updateSeatCount(socket, io, () => requested)
+    if (updated !== null) {
+      console.log(`房间 ${socket.currentRoomId} 调整目标座位数至 ${updated} (请求: ${requested})`)
+    }
+  })
+
+  socket.on('add_ai', async () => {
+    const updated = await updateSeatCount(socket, io, (current) => current + 1)
+    if (updated !== null) {
+      console.log(`房间 ${socket.currentRoomId} 手动添加 AI，目标座位数 ${updated}`)
+    }
+  })
+
+  socket.on('remove_ai', async () => {
+    const updated = await updateSeatCount(socket, io, (current) => current - 1)
+    if (updated !== null) {
+      console.log(`房间 ${socket.currentRoomId} 移除 AI，目标座位数 ${updated}`)
+    }
+  })
+
   // 聊天消息
   socket.on('send_chat_message', async (data) => {
     try {
@@ -332,25 +440,35 @@ const handleLeaveRoom = async (socket, io) => {
 
   const roomId = socket.currentRoomId
   const game = activeRooms.get(roomId)
-  
+
   if (game) {
     game.removePlayer(socket.userId)
-    
-    // 更新数据库中的房间玩家信息
-    await GameRoom.updatePlayers(roomId, game.getPlayers())
 
-    // 通知房间内其他玩家
-    io.to(roomId).emit('player_left', {
-      playerId: socket.userId,
-      players: game.getPlayers(),
-      gameState: game.getGameState()
-    })
+    const realPlayers = typeof game.countRealPlayers === 'function'
+      ? game.countRealPlayers()
+      : game.getPlayers().filter(player => !player.isAI).length
 
-    // 如果房间没有玩家了，清理游戏实例
-    if (game.getPlayerCount() === 0) {
+    if (realPlayers === 0) {
       activeRooms.delete(roomId)
-      await GameRoom.updateStatus(roomId, 'finished')
+      await GameRoom.updatePlayers(roomId, [])
+      await GameRoom.updateGameState(roomId, null)
+      await GameRoom.updateStatus(roomId, 'waiting')
+      broadcastPlayerList(io, roomId, null)
       console.log(`房间 ${roomId} 已清理`)
+    } else {
+      if (!game.gameStarted && typeof game.syncAIPlayers === 'function') {
+        game.syncAIPlayers()
+      }
+
+      await GameRoom.updatePlayers(roomId, game.getPlayers())
+      await GameRoom.updateGameState(roomId, game.getGameState())
+
+      io.to(roomId).emit('player_left', {
+        playerId: socket.userId,
+        players: game.getPlayers(),
+        gameState: game.getGameState()
+      })
+      broadcastPlayerList(io, roomId, game)
     }
   }
 
@@ -358,6 +476,7 @@ const handleLeaveRoom = async (socket, io) => {
   socket.currentRoomId = null
   console.log(`玩家 ${socket.username} 离开房间 ${roomId}`)
 }
+
 
 // 处理AI连续行动
 const processAIActions = async (game, roomId, io) => {

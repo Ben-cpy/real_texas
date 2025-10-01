@@ -1,17 +1,21 @@
-# Registration Interface Display Error
-When registering a new user, the username field appears completely white, and the password input is also white. You can only perceive the input when the field is selected.
-
-# Single Player Game Default Player Count
-+ On the main interface, currently there is only one player (me). When entering single player mode, the default configuration should be a 6-player game. During the game preparation phase, I should be able to increase or decrease the number of players (minimum is 3 players).
+# Logout Button
+Add a button at the top right corner of the main interface. Clicking it will log out the current account, allowing login with another account.
 
 # Single Player Game Re-entry Failure
-When I exit and re-enter, there are many notification sounds and a message saying "Unable to join room." I don't know the cause of the issue. Logically, clicking "Leave" should destroy the room, since this is a single player game with only me and some AI.
+The issue still exists. When I log in for the first time and start a single player game, I can only complete a relatively complete process on the first run. However, there is still a problem during settlement, and the two AI players do not finish the game. After finishing a round, the game should automatically start the next round, and the previous state needs to be cleared.
+When I exit and re-enter, there are many notification sounds and a message saying "Unable to join room." I don't know the cause. Logically, clicking "Leave" should destroy the room, since this is a single player game with only me and some AI.
 
-# Single Player Game Cannot Start
-After clicking "Start Game," there is a display error on the frontend. ![alt text](image.png) It shows "Your Turn," but when I perform actions, my table keeps moving down and displays "Invalid Player." I can repeatedly click these actions, which does not follow the real rules. Since I only have one action, it should proceed to the next round.
+# Restart Button Not Working
+During the unready phase, there shouldn't be a restart button. Currently, if I click the restart button during the unready phase, my table moves downward. I don't know why this happens.
 
-# Adding AI After Game Start
-Why does the option to add AI only appear after the game has started? Once the game officially begins, the number of players should not be modified.
+# Hand Display Error
+After starting the game, I can't see my own two cards; they are all shown as gray. I can't see the AI players' cards either, but I should be able to see my own. Also, the table is too crowded, and the players and my table are not aligned. ![alt text](image.png) Some cards are blocked by other players. The card backs are also too ugly; please use a fresher style.
 
-# Issues with the Entire Game Flow
-Currently, the entire game flow is not working correctly. After seeing the initial cards, there should be big blind/small blind, actions, etc. You need to ensure the whole process is correct and that the frontend supports complete interactive gameplay.
+# State Management Error
+After playing a round, when I exit and re-enter the game, ![alt text](image-1.png) a bunch of errors are displayed. There is a problem with your state management. Every time I enter a room, the state should be reset.
+
+# Incorrect Display
+Currently, even when the game hasn't started, it shows "My Turn" and the buttons can be clicked. These actions should only be available when it's actually my turn.
+
+# Overall Flow
+Currently, it's not possible to play a complete Texas Hold'em game with AI players. You should make sure the entire process can be completed.
