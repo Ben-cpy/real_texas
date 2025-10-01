@@ -243,6 +243,9 @@ export class PokerGame {
       player.folded = false
       player.allIn = false
       player.active = player.chips > 0
+      player.initialChips = player.chips
+      player.handRank = null
+      player.lastAction = null
     })
 
     // 发底牌
@@ -253,6 +256,39 @@ export class PokerGame {
     
     // 设置第一个行动玩家（大盲注后一位）
     this.currentPlayerIndex = this.getNextActivePlayer((this.dealerIndex + 3) % this.players.length)
+  }
+
+  advanceDealer() {
+    const eligibleIndices = this.players
+      .map((player, idx) => ({ player, idx }))
+      .filter(({ player }) => player.chips > 0 && player.active !== false)
+
+    if (eligibleIndices.length === 0) {
+      return
+    }
+
+    const currentDealerPosition = eligibleIndices.findIndex(({ idx }) => idx === this.dealerIndex)
+    const nextPosition = currentDealerPosition === -1
+      ? 0
+      : (currentDealerPosition + 1) % eligibleIndices.length
+
+    this.dealerIndex = eligibleIndices[nextPosition].idx
+  }
+
+  startNextHand() {
+    const activePlayers = this.players.filter(player => player.active && player.chips > 0)
+    if (activePlayers.length < 2) {
+      this.gameStarted = false
+      this.gameFinished = true
+      return { success: false, error: '没有足够的玩家开始新一局' }
+    }
+
+    this.advanceDealer()
+    this.gameFinished = false
+    this.gameStarted = true
+    this.newHand()
+
+    return { success: true, gameState: this.getGameState() }
   }
 
   // 发底牌
@@ -715,53 +751,63 @@ export class PokerGame {
     // 这里是简化的牌力评估，实际应用中需要更复杂的算法
     // 返回值越大牌力越强
     const values = cards.map(c => c.value).sort((a, b) => b - a)
-    
+
     // 检查同花
     const suits = cards.map(c => c.suit)
     const isFlush = suits.some(suit => suits.filter(s => s === suit).length >= 5)
-    
+
     // 检查顺子
     const isStraight = this.checkStraight(values)
-    
+
     // 检查对子、三条等
     const counts = this.countValues(values)
     const countValues = Object.values(counts).sort((a, b) => b - a)
-    
-    if (isFlush && isStraight) return { rank: 8, values } // 同花顺
-    if (countValues[0] === 4) return { rank: 7, values } // 四条
-    if (countValues[0] === 3 && countValues[1] === 2) return { rank: 6, values } // 葫芦
-    if (isFlush) return { rank: 5, values } // 同花
-    if (isStraight) return { rank: 4, values } // 顺子
-    if (countValues[0] === 3) return { rank: 3, values } // 三条
-    if (countValues[0] === 2 && countValues[1] === 2) return { rank: 2, values } // 两对
-    if (countValues[0] === 2) return { rank: 1, values } // 一对
-    
-    return { rank: 0, values } // 高牌
+
+    if (isFlush && isStraight) return { rank: 9, values } // 同花顺
+    if (countValues[0] === 4) return { rank: 8, values } // 四条
+    if (countValues[0] === 3 && countValues[1] === 2) return { rank: 7, values } // 葫芦
+    if (isFlush) return { rank: 6, values } // 同花
+    if (isStraight) return { rank: 5, values } // 顺子
+    if (countValues[0] === 3) return { rank: 4, values } // 三条
+    if (countValues[0] === 2 && countValues[1] === 2) return { rank: 3, values } // 两对
+    if (countValues[0] === 2) return { rank: 2, values } // 一对
+
+    return { rank: 1, values } // 高牌
   }
 
   checkStraight(values) {
     const uniqueValues = [...new Set(values)].sort((a, b) => b - a)
-    if (uniqueValues.length < 5) return false
-    
+
     for (let i = 0; i <= uniqueValues.length - 5; i++) {
-      let consecutive = true
-      for (let j = 1; j < 5; j++) {
-        if (uniqueValues[i + j] !== uniqueValues[i] - j) {
-          consecutive = false
+      let consecutive = 1
+      for (let j = i; j < uniqueValues.length - 1 && consecutive < 5; j++) {
+        if (uniqueValues[j] - 1 === uniqueValues[j + 1]) {
+          consecutive += 1
+        } else if (uniqueValues[j] !== uniqueValues[j + 1]) {
           break
         }
       }
-      if (consecutive) return true
+
+      if (consecutive >= 5) {
+        return true
+      }
     }
+
+    if (uniqueValues.includes(14)) {
+      const wheel = [5, 4, 3, 2]
+      if (wheel.every(value => uniqueValues.includes(value))) {
+        return true
+      }
+    }
+
     return false
   }
 
   countValues(values) {
-    const counts = {}
-    values.forEach(value => {
-      counts[value] = (counts[value] || 0) + 1
-    })
-    return counts
+    return values.reduce((acc, value) => {
+      acc[value] = (acc[value] || 0) + 1
+      return acc
+    }, {})
   }
 
   compareHands(hand1, hand2) {
@@ -831,7 +877,18 @@ export class PokerGame {
 
   // 检查游戏是否结束
   isGameFinished() {
-    return this.gameFinished
+    if (this.gameFinished) {
+      return true
+    }
+
+    const activePlayers = this.players.filter(player => player.active && !player.folded)
+
+    if (activePlayers.length <= 1 && this.gameStarted) {
+      this.gameFinished = true
+      return true
+    }
+
+    return false
   }
 
   // 获取游戏结果
@@ -855,19 +912,23 @@ export class PokerGame {
       winner = activePlayers[0]
     }
 
+    const winnerInfo = {
+      id: winner.id,
+      name: winner.name,
+      chips: winner.chips
+    }
+
     return {
-      winner: {
-        id: winner.id,
-        name: winner.name,
-        chips: winner.chips
-      },
+      winner: winnerInfo,
+      winners: [winnerInfo],
       pot: this.pot,
       players: this.players.map(player => ({
         id: player.id,
         name: player.name,
         finalChips: player.chips,
         chipsChange: player.chips - (player.initialChips || 0),
-        folded: player.folded
+        folded: player.folded,
+        isAI: player.isAI || false
       }))
     }
   }

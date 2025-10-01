@@ -305,6 +305,8 @@ export const handleSocketConnection = (socket, io) => {
           gameState: game.getGameState()
         })
 
+        await processAIActions(game, socket.currentRoomId, io)
+
         console.log(`游戏开始: 房间 ${socket.currentRoomId}`)
       } else {
         socket.emit('error', { error: result.error })
@@ -442,6 +444,9 @@ const handleLeaveRoom = async (socket, io) => {
   const game = activeRooms.get(roomId)
 
   if (game) {
+    const leavingPlayer = Array.isArray(game.players) ? game.players.find(player => player.id === socket.userId) : null
+    const leavingPlayerName = leavingPlayer?.name || null
+
     game.removePlayer(socket.userId)
 
     const realPlayers = typeof game.countRealPlayers === 'function'
@@ -465,6 +470,7 @@ const handleLeaveRoom = async (socket, io) => {
 
       io.to(roomId).emit('player_left', {
         playerId: socket.userId,
+        playerName: leavingPlayerName,
         players: game.getPlayers(),
         gameState: game.getGameState()
       })
@@ -481,7 +487,8 @@ const handleLeaveRoom = async (socket, io) => {
 // 处理AI连续行动
 const processAIActions = async (game, roomId, io) => {
   try {
-    let maxAIActions = 10 // 防止无限循环
+    const playerCount = typeof game.getPlayers === 'function' ? game.getPlayers().length : (game.players?.length || 0)
+    const maxAIActions = Math.max(60, playerCount * 12) // 防止无限循环，并确保足够的AI行动次数
     let aiActionCount = 0
     
     while (aiActionCount < maxAIActions) {
@@ -524,7 +531,11 @@ const processAIActions = async (game, roomId, io) => {
         break
       }
     }
-    
+
+    if (aiActionCount >= maxAIActions) {
+      console.warn(`AI action loop limit reached for room ${roomId} after ${aiActionCount} actions`)
+    }
+
   } catch (error) {
     console.error('AI行动处理错误:', error)
   }
@@ -535,52 +546,61 @@ const handleGameFinish = async (game, roomId, io) => {
   try {
     const results = game.getGameResults()
 
-    // 更新玩家筹码和统计数据 (只更新真实玩家，跳过AI)
+    if (!results) {
+      console.warn(`房间 ${roomId} 的游戏结果为空，无法结算`)
+      return
+    }
+
     const playerAchievements = {}
 
     for (const player of results.players) {
-      if (!player.isAI) {
-        await User.updateChips(player.id, player.finalChips)
-        await User.updateGameStats(player.id, {
-          gamesPlayed: 1,
-          gamesWon: player.id === results.winner.id ? 1 : 0,
-          chipsWon: Math.max(0, player.chipsChange),
-          chipsLost: Math.max(0, -player.chipsChange)
-        })
+      const playerState = Array.isArray(game.players) ? game.players.find(p => p.id === player.id) : null
+      if (playerState?.isAI) {
+        continue
+      }
 
-        // 检查成就
-        const userStats = await User.getStats(player.id)
-        const userAchievements = await User.getAchievements(player.id)
-        const newAchievements = checkAchievements(userStats, userAchievements)
+      await User.updateChips(player.id, player.finalChips)
+      await User.updateGameStats(player.id, {
+        gamesPlayed: 1,
+        gamesWon: player.id === results.winner.id ? 1 : 0,
+        chipsWon: Math.max(0, player.chipsChange),
+        chipsLost: Math.max(0, -player.chipsChange)
+      })
 
-        if (newAchievements.length > 0) {
-          // 添加新成就
-          const achievementIds = newAchievements.map(a => a.id)
-          await User.addAchievements(player.id, achievementIds)
+      const userStats = await User.getStats(player.id)
+      const userAchievements = await User.getAchievements(player.id)
+      const newAchievements = checkAchievements(userStats, userAchievements)
 
-          // 计算并添加成就奖励
-          const totalReward = newAchievements.reduce((sum, a) => sum + a.reward, 0)
-          if (totalReward > 0) {
-            const updatedUser = await User.findById(player.id)
-            await User.updateChips(player.id, updatedUser.chips + totalReward)
-          }
+      if (newAchievements.length > 0) {
+        const achievementIds = newAchievements.map(a => a.id)
+        await User.addAchievements(player.id, achievementIds)
 
-          playerAchievements[player.id] = newAchievements
+        const totalReward = newAchievements.reduce((sum, a) => sum + a.reward, 0)
+        if (totalReward > 0) {
+          const updatedUser = await User.findById(player.id)
+          await User.updateChips(player.id, updatedUser.chips + totalReward)
         }
+
+        playerAchievements[player.id] = newAchievements
       }
     }
 
-    // 更新房间状态
-    await GameRoom.updateStatus(roomId, 'finished')
+    const finalState = game.getGameState()
 
-    // 广播游戏结果
+    await GameRoom.updateStatus(roomId, 'finished')
+    await GameRoom.updatePlayers(roomId, game.getPlayers())
+    await GameRoom.updateGameState(roomId, finalState)
+
     io.to(roomId).emit('game_finished', {
       results,
       winner: results.winner,
-      pot: results.pot
+      winners: results.winners || [results.winner],
+      pot: results.pot,
+      gameState: finalState
     })
 
-    // 广播成就解锁
+    broadcastPlayerList(io, roomId, game)
+
     for (const [playerId, achievements] of Object.entries(playerAchievements)) {
       io.to(roomId).emit('achievements_unlocked', {
         playerId,
@@ -594,10 +614,58 @@ const handleGameFinish = async (game, roomId, io) => {
       })
     }
 
-    // 清理游戏实例
-    activeRooms.delete(roomId)
+    console.log(`游戏结束: 房间 ${roomId}, 获胜者 ${results.winner.name}`)
 
-    console.log(`游戏结束: 房间 ${roomId}, 获胜者: ${results.winner.name}`)
+    setTimeout(async () => {
+      try {
+        const nextHand = game.startNextHand()
+
+        if (nextHand.success) {
+          await GameRoom.updateStatus(roomId, 'playing')
+          await GameRoom.updatePlayers(roomId, game.getPlayers())
+          await GameRoom.updateGameState(roomId, nextHand.gameState)
+
+          io.to(roomId).emit('game_started', {
+            gameState: nextHand.gameState
+          })
+          io.to(roomId).emit('game_update', {
+            gameState: nextHand.gameState,
+            lastAction: null
+          })
+          broadcastPlayerList(io, roomId, game)
+          await processAIActions(game, roomId, io)
+        } else {
+          game.gameStarted = false
+          game.gameFinished = false
+          game.phase = 'waiting'
+          game.communityCards = []
+          game.pot = 0
+          game.currentBet = 0
+          game.currentPlayerIndex = -1
+          game.players.forEach(player => {
+            player.cards = []
+            player.currentBet = 0
+            player.totalBet = 0
+            player.folded = false
+            player.allIn = false
+            player.active = player.chips > 0
+            player.lastAction = null
+          })
+
+          const waitingState = game.getGameState()
+          await GameRoom.updateStatus(roomId, 'waiting')
+          await GameRoom.updateGameState(roomId, waitingState)
+          broadcastPlayerList(io, roomId, game)
+          io.to(roomId).emit('game_update', {
+            gameState: waitingState,
+            lastAction: null,
+            message: nextHand.error
+          })
+        }
+      } catch (error) {
+        console.error('准备下一局时出错:', error)
+      }
+    }, 2500)
 
   } catch (error) {
     console.error('处理游戏结束错误:', error)

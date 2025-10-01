@@ -26,9 +26,15 @@ export const useGameStore = defineStore('game', () => {
 
   // Computed
   const isMyTurn = computed(() => {
-    if (currentPlayerIndex.value === -1 || players.value.length === 0) {
+    if (
+      gamePhase.value === 'waiting' ||
+      gamePhase.value === 'showdown' ||
+      currentPlayerIndex.value === -1 ||
+      players.value.length === 0
+    ) {
       return false
     }
+
     const currentPlayer = players.value[currentPlayerIndex.value]
     const userId = localStorage.getItem('user')
       ? JSON.parse(localStorage.getItem('user')).id
@@ -219,9 +225,12 @@ export const useGameStore = defineStore('game', () => {
 
   function handleGameFinished(data) {
     console.log('Game finished:', data)
-    winners.value = data.winners || []
+    const winnerList = data.winners || data.results?.winners || (data.winner ? [data.winner] : [])
+    winners.value = winnerList || []
     if (data.gameState) {
       updateGameState(data.gameState)
+    } else if (data.results?.gameState) {
+      updateGameState(data.results.gameState)
     }
   }
 
@@ -245,7 +254,12 @@ export const useGameStore = defineStore('game', () => {
     if (state.pot !== undefined) pot.value = state.pot
     if (state.currentBet !== undefined) currentBet.value = state.currentBet
     if (state.minRaise !== undefined) minRaise.value = state.minRaise
-    if (state.phase) gamePhase.value = state.phase
+    if (state.phase) {
+      gamePhase.value = state.phase
+      if (state.phase !== 'showdown') {
+        winners.value = []
+      }
+    }
     if (state.currentPlayerIndex !== undefined)
       currentPlayerIndex.value = state.currentPlayerIndex
     if (state.dealerIndex !== undefined) dealerIndex.value = state.dealerIndex

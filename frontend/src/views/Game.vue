@@ -61,8 +61,15 @@
           >
             {{ soundEnabled ? '🔊' : '🔇' }}
           </button>
-          <button class="btn btn-warning" @click="resetGame">重开</button>
+          <button
+            v-if="gameStore.gamePhase !== 'waiting'"
+            class="btn btn-warning"
+            @click="resetGame"
+          >
+            重开
+          </button>
           <button class="btn btn-danger" @click="leaveGame">离开</button>
+          <button class="btn btn-outline" @click="handleLogout">退出登录</button>
         </div>
       </div>
     </header>
@@ -134,7 +141,8 @@
                   :class="{
                     'own-card': player.id === userStore.user?.id,
                     'opponent-card': player.id !== userStore.user?.id,
-                    'card-back': player.id !== userStore.user?.id && !card.revealed
+                    'card-back': player.id !== userStore.user?.id && !card.revealed,
+                    'revealed': player.id === userStore.user?.id || card.revealed
                   }"
                 >
                   <span v-if="player.id === userStore.user?.id || card.revealed" :class="getCardColor(card.suit)">
@@ -238,7 +246,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/user'
@@ -250,6 +258,7 @@ const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 const gameStore = useGameStore()
+const roomIdParam = ref(route.query.roomId || 'default-room')
 
 const MAX_SEATS = 6
 const MIN_SEATS = 3
@@ -262,6 +271,21 @@ const gameLogs = ref([])
 const chatMessages = ref([])
 const chatInput = ref('')
 const soundEnabled = ref(soundService.enabled)
+
+const hasJoinedRoom = ref(false)
+const socketListeners = []
+
+const registerSocketListener = (event, handler) => {
+  socketService.on(event, handler)
+  socketListeners.push({ event, handler })
+}
+
+const cleanupSocketListeners = () => {
+  socketListeners.forEach(({ event, handler }) => {
+    socketService.off(event, handler)
+  })
+  socketListeners.length = 0
+}
 
 // Computed properties
 const canCheck = computed(() => gameStore.currentBet === 0)
@@ -288,17 +312,25 @@ const getPlayerPosition = (index) => {
   const containerWidth = containerRect.width || 600
   const containerHeight = containerRect.height || 400
 
-  const totalPlayers = gameStore.players.length
-  const angle = (360 / totalPlayers) * index - 90 // Start from top
+  const totalPlayers = Math.max(gameStore.players.length, 1)
+  const myPlayerId = userStore.user?.id
+  const myIndex = gameStore.players.findIndex((player) => player.id === myPlayerId)
+  const relativeIndex = myIndex >= 0
+    ? (index - myIndex + totalPlayers) % totalPlayers
+    : index
+  const baseAngle = (Math.PI * 2 * relativeIndex) / totalPlayers
+  const angleOffset = myIndex >= 0 ? Math.PI / 2 : -Math.PI / 2
+  const angle = baseAngle + angleOffset
 
-  const radiusX = Math.min(containerWidth * 0.35, 280)
-  const radiusY = Math.min(containerHeight * 0.3, 160)
+  const radiusX = Math.min(containerWidth * 0.4, 320)
+  const radiusY = Math.min(containerHeight * 0.32, 190)
 
-  const x = Math.cos((angle * Math.PI) / 180) * radiusX
-  const y = Math.sin((angle * Math.PI) / 180) * radiusY
+  const x = Math.cos(angle) * radiusX
+  const y = Math.sin(angle) * radiusY
 
   return {
-    transform: `translate(${x}px, ${y}px)`
+    transform: `translate(${x}px, ${y}px)`,
+    zIndex: Math.round(200 + y)
   }
 }
 
@@ -366,14 +398,29 @@ const startGame = () => {
 }
 
 const resetGame = () => {
+  if (gameStore.gamePhase === 'waiting') {
+    return
+  }
+
   soundService.playClick()
   gameStore.resetGame()
   addLog('游戏重置')
 }
 
 const leaveGame = () => {
+  hasJoinedRoom.value = false
   gameStore.leaveRoom()
   router.push('/')
+}
+
+const handleLogout = () => {
+  soundService.playClick()
+  hasJoinedRoom.value = false
+  cleanupSocketListeners()
+  gameStore.cleanup()
+  gameStore.leaveRoom()
+  userStore.logout()
+  router.push('/login')
 }
 
 const addLog = (message) => {
@@ -419,145 +466,217 @@ const decreaseSeats = () => {
   gameStore.setAICount(target)
 }
 
-// Socket event handlers
-const setupSocketListeners = () => {
-  // Log game events
-  socketService.on('game_update', (data) => {
-    if (data.lastAction) {
-      const action = data.lastAction
-      addLog(`${action.playerName} ${getActionText(action.action)}${action.amount ? ` $${action.amount}` : ''}`)
+const joinCurrentRoom = () => {
+  const targetRoom = roomIdParam.value
+  if (!targetRoom) {
+    return
+  }
 
-      // Play sound for actions
-      if (action.action === 'fold') soundService.playFold()
-      else if (action.action === 'check') soundService.playCheck()
-      else if (action.action === 'call') soundService.playCall()
-      else if (action.action === 'bet' || action.action === 'raise') soundService.playRaise()
-      else if (action.action === 'all_in') soundService.playAllIn()
-    }
+  const status = socketService.getStatus()
+  if (!status.authenticated) {
+    return
+  }
 
-    // Check if it's the current player's turn
-    if (gameStore.isMyTurn) {
-      soundService.playYourTurn()
-    }
-  })
+  if (!hasJoinedRoom.value) {
+    gameLogs.value = []
+    chatMessages.value = []
+    gameStore.joinRoom(targetRoom)
+    addLog('已连接到游戏服务器')
+    hasJoinedRoom.value = true
+  } else {
+    socketService.joinRoom(targetRoom)
+  }
+}
 
-  socketService.on('game_started', () => {
-    soundService.playGameStart()
-    soundService.playCardDeal()
-    addLog('游戏已开始！')
-  })
+const ensureAuthenticated = () => {
+  if (!userStore.token) {
+    return
+  }
 
-  socketService.on('game_finished', (data) => {
-    if (data.winners && data.winners.length > 0) {
-      const winnerNames = data.winners.map(w => w.name).join(', ')
-      addLog(`游戏结束！获胜者: ${winnerNames}`)
+  const status = socketService.getStatus()
+  if (!status.connected) {
+    socketService.connect()
+    return
+  }
 
-      // Check if current user is the winner
-      const isWinner = data.winners.some(w => w.id === userStore.user?.id)
-      if (isWinner) {
-        soundService.playWin()
-      } else {
-        soundService.playLose()
+  if (!status.authenticated) {
+    socketService.authenticate(userStore.token)
+    return
+  }
+
+  joinCurrentRoom()
+}
+
+const handleAuthenticated = () => {
+  joinCurrentRoom()
+}
+
+const handleConnectionStatus = (data) => {
+  if (data?.connected) {
+    ensureAuthenticated()
+  } else {
+    hasJoinedRoom.value = false
+  }
+}
+
+const handleReconnected = () => {
+  hasJoinedRoom.value = false
+  ensureAuthenticated()
+}
+
+watch(
+  () => route.query.roomId,
+  (newRoomId) => {
+    const resolvedRoom = newRoomId || 'default-room'
+    if (roomIdParam.value !== resolvedRoom) {
+      roomIdParam.value = resolvedRoom
+      hasJoinedRoom.value = false
+      if (socketService.getStatus().authenticated) {
+        joinCurrentRoom()
       }
     }
-  })
+  }
+)
 
-  socketService.on('player_joined', (data) => {
-    soundService.playNotification()
-    addLog(`${data.player.name} 加入了游戏`)
-  })
+// Socket event handlers
+const setupSocketListeners = () => {
+  const handlers = {
+    game_update: (data) => {
+      if (data.lastAction) {
+        const action = data.lastAction
+        addLog(`${action.playerName} ${getActionText(action.action)}${action.amount ? ` $${action.amount}` : ''}`)
 
-  socketService.on('player_left', (data) => {
-    soundService.playNotification()
-    addLog(`${data.player.name} 离开了游戏`)
-  })
+        if (action.action === 'fold') soundService.playFold()
+        else if (action.action === 'check') soundService.playCheck()
+        else if (action.action === 'call') soundService.playCall()
+        else if (action.action === 'bet' || action.action === 'raise') soundService.playRaise()
+        else if (action.action === 'all_in') soundService.playAllIn()
+      }
 
-  socketService.on('action_error', (data) => {
-    soundService.playError()
-    ElMessage.error(data.error)
-    addLog(`错误: ${data.error}`)
-  })
+      if (gameStore.isMyTurn) {
+        soundService.playYourTurn()
+      }
+    },
+    game_started: () => {
+      soundService.playGameStart()
+      soundService.playCardDeal()
+      addLog('游戏已开始！')
+    },
+    game_finished: (data) => {
+      const winners =
+        data?.winners ||
+        data?.results?.winners ||
+        (data?.winner ? [data.winner] : [])
 
-  socketService.on('error', (data) => {
-    soundService.playError()
-    ElMessage.error(data.error)
-    addLog(`错误: ${data.error}`)
-  })
+      if (Array.isArray(winners) && winners.length > 0) {
+        const winnerNames = winners.map((w) => w.name).join(', ')
+        const potAmount = data?.pot ?? data?.results?.pot ?? 0
+        addLog(`游戏结束！获胜者: ${winnerNames} (奖池 ${potAmount})`)
 
-  socketService.on('chat_message', (data) => {
-    chatMessages.value.push({
-      userId: data.userId,
-      username: data.username,
-      message: data.message,
-      timestamp: data.timestamp
-    })
-    // Keep only last 50 messages
-    if (chatMessages.value.length > 50) {
-      chatMessages.value.shift()
-    }
-  })
-
-  socketService.on('achievements_unlocked', (data) => {
-    if (data.playerId === userStore.user?.id) {
-      // Play success sound
-      soundService.playSuccess()
-
-      // Show achievement notifications
-      data.achievements.forEach((achievement, index) => {
-        setTimeout(() => {
-          ElMessage.success({
-            message: `🎉 成就解锁！${achievement.icon} ${achievement.name}\n${achievement.description}\n奖励: ${achievement.reward} 筹码`,
-            duration: 5000,
-            showClose: true
-          })
-          addLog(`解锁成就: ${achievement.name} (+${achievement.reward} 筹码)`)
-        }, index * 1000)
+        const isWinner = winners.some((w) => w.id === userStore.user?.id)
+        if (isWinner) {
+          soundService.playWin()
+        } else {
+          soundService.playLose()
+        }
+      } else {
+        addLog('本局结束，正在准备下一局...')
+      }
+    },
+    player_joined: (data) => {
+      const name = data?.player?.name || data?.playerName
+      if (!name) {
+        return
+      }
+      soundService.playNotification()
+      addLog(`${name} 加入了游戏`)
+    },
+    player_left: (data) => {
+      const name = (
+        data?.player?.name ||
+        data?.playerName ||
+        gameStore.players.find((p) => p.id === data?.playerId)?.name ||
+        '一位玩家'
+      )
+      soundService.playNotification()
+      addLog(`${name} 离开了游戏`)
+    },
+    action_error: (data) => {
+      soundService.playError()
+      ElMessage.error(data.error)
+      addLog(`错误: ${data.error}`)
+    },
+    error: (data) => {
+      soundService.playError()
+      ElMessage.error(data.error)
+      addLog(`错误: ${data.error}`)
+    },
+    chat_message: (data) => {
+      chatMessages.value.push({
+        userId: data.userId,
+        username: data.username,
+        message: data.message,
+        timestamp: data.timestamp
       })
-    } else {
-      // Another player unlocked achievement
-      addLog(`玩家解锁了 ${data.achievements.length} 个成就`)
-    }
+      if (chatMessages.value.length > 50) {
+        chatMessages.value.shift()
+      }
+    },
+    achievements_unlocked: (data) => {
+      if (data.playerId === userStore.user?.id) {
+        soundService.playSuccess()
+
+        data.achievements.forEach((achievement, index) => {
+          setTimeout(() => {
+            ElMessage.success({
+              message: `🎉 成就解锁 ${achievement.icon} ${achievement.name}
+${achievement.description}
+奖励: ${achievement.reward} 筹码`,
+              duration: 5000,
+              showClose: true
+            })
+            addLog(`解锁成就: ${achievement.name} (+${achievement.reward} 筹码)`)
+          }, index * 1000)
+        })
+      } else {
+        addLog(`玩家解锁了 ${data.achievements.length} 个成就`)
+      }
+    },
+    authenticated: handleAuthenticated,
+    connection_status: handleConnectionStatus,
+    reconnected: handleReconnected
+  }
+
+  Object.entries(handlers).forEach(([event, handler]) => {
+    registerSocketListener(event, handler)
   })
 }
 
+
 // Lifecycle
 onMounted(async () => {
-  // Check if user is logged in
+  if (!userStore.isLoggedIn) {
+    userStore.initFromStorage()
+  }
+
   if (!userStore.isLoggedIn) {
     ElMessage.error('请先登录')
     router.push('/login')
     return
   }
 
-  // Get room ID from query params or use default
-  const roomIdParam = route.query.roomId || 'default-room'
+  roomIdParam.value = route.query.roomId || 'default-room'
 
-  // Initialize stores
   gameStore.initSocket()
   setupSocketListeners()
-
-  // Connect socket
-  socketService.connect()
-
-  // Wait for socket to connect
-  setTimeout(() => {
-    if (socketService.getStatus().connected) {
-      socketService.authenticate(userStore.token)
-
-      // Wait for authentication
-      socketService.on('authenticated', () => {
-        gameStore.joinRoom(roomIdParam)
-        addLog('已连接到游戏服务器')
-      })
-    } else {
-      ElMessage.error('无法连接到游戏服务器')
-    }
-  }, 500)
+  ensureAuthenticated()
 })
 
 onBeforeUnmount(() => {
+  cleanupSocketListeners()
   gameStore.cleanup()
   gameStore.leaveRoom()
+  hasJoinedRoom.value = false
 })
 </script>
 
@@ -659,6 +778,19 @@ onBeforeUnmount(() => {
   display: flex;
   gap: var(--space-sm);
   flex-wrap: wrap;
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--color-text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  padding: var(--space-sm) var(--space-md);
+  transition: all var(--transition-base);
+}
+
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
 }
 
 .waiting-status {
@@ -886,37 +1018,36 @@ onBeforeUnmount(() => {
 
 /* Card Back Design */
 .card-back {
-  background: 
-    linear-gradient(135deg, #1e40af 0%, #1d4ed8 25%, #2563eb 50%, #1d4ed8 75%, #1e40af 100%),
-    radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
-  background-size: 100% 100%, 20px 20px;
+  background:
+    linear-gradient(140deg, #0ea5e9 0%, #6366f1 55%, #a855f7 100%),
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.3) 0%, transparent 60%);
+  background-size: 100% 100%, 22px 22px;
   position: relative;
   overflow: hidden;
   color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 6px 14px rgba(14, 165, 233, 0.25);
 }
-
 .card-back::before {
   content: '';
   position: absolute;
   inset: 0;
-  background-image: 
-    repeating-linear-gradient(45deg, 
-      transparent 0px, 
-      transparent 2px, 
-      rgba(255, 255, 255, 0.08) 2px, 
-      rgba(255, 255, 255, 0.08) 4px
-    );
-  background-size: 8px 8px;
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.18) 0%, transparent 55%),
+    radial-gradient(circle at 75% 75%, rgba(255, 255, 255, 0.16) 0%, transparent 55%);
+  opacity: 0.9;
 }
-
 .card-back::after {
   content: '';
   position: absolute;
-  inset: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  inset: 4px;
   border-radius: var(--border-radius-sm);
-  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.12) 0%, transparent 70%);
 }
+
 
 /* Players Layout */
 .players-container {
