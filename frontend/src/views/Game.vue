@@ -17,7 +17,8 @@
 
       <div class="control-cluster">
         <button class="btn icon-btn" @click="toggleSound" :aria-pressed="soundEnabled" title="Toggle Sound">
-          <span>{{ soundEnabled ? '馃攰' : '馃攪' }}</span>
+          <span aria-hidden="true">{{ soundEnabled ? '🔊' : '🔇' }}</span>
+          <span class="sr-only">{{ soundEnabled ? 'Disable sound' : 'Enable sound' }}</span>
         </button>
         <button class="btn icon-btn" @click="showHelp" title="Game Rules & Help">
           <span>❓</span>
@@ -39,6 +40,13 @@
         </div>
       </div>
     </header>
+
+    <div class="round-indicator" aria-live="polite">
+      <div class="round-chip">
+        <span class="round-phase">{{ phaseLabel }}</span>
+        <span v-if="phaseDescription" class="round-detail">{{ phaseDescription }}</span>
+      </div>
+    </div>
 
     <transition name="phase-banner">
       <div v-if="showPhaseBanner" class="phase-banner">
@@ -98,6 +106,74 @@
               </ul>
             </section>
           </div>
+
+          <transition name="showdown-summary">
+            <div v-if="showShowdownSummary" class="showdown-overlay" role="dialog" aria-modal="true">
+              <div class="showdown-card">
+                <div class="summary-header">
+                  <div>
+                    <h3>Showdown</h3>
+                    <p class="summary-subtitle">Final hands for the pot</p>
+                  </div>
+                  <span class="summary-pot">Pot ${{ showdownPot }}</span>
+                </div>
+
+                <div class="summary-board">
+                  <div
+                    v-for="(card, index) in paddedCommunityCards"
+                    :key="`showdown-board-${index}`"
+                    class="card-slot"
+                    :class="{ revealed: !!card }"
+                  >
+                    <span v-if="card" class="card-face" :class="getCardColor(card.suit)">
+                      {{ card.suit }}{{ card.rank }}
+                    </span>
+                    <div v-else class="card-back small"></div>
+                  </div>
+                </div>
+
+                <div class="summary-players">
+                  <div
+                    v-for="player in showdownPlayers"
+                    :key="`showdown-player-${player.id}`"
+                    class="summary-player"
+                    :class="{ winner: player.isWinner }"
+                  >
+                    <div class="player-meta">
+                      <span class="player-name">{{ player.name }}</span>
+                      <span v-if="player.bestHand?.rankName" class="player-hand">{{ player.bestHand.rankName }}</span>
+                      <span v-else class="player-hand muted">Revealed</span>
+                    </div>
+                    <div class="player-cards">
+                      <div
+                        v-for="(card, cIndex) in player.cards"
+                        :key="`showdown-card-${player.id}-${cIndex}`"
+                        class="card-slot"
+                        :class="{ revealed: !!card?.rank }"
+                      >
+                        <span v-if="card?.rank" class="card-face" :class="getCardColor(card.suit)">
+                          {{ card.suit }}{{ card.rank }}
+                        </span>
+                        <div v-else class="card-back small"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="summary-actions">
+                  <button
+                    v-if="gameStore.isRoomCreator"
+                    class="btn primary large"
+                    @click="startGame"
+                    :disabled="!gameStore.canStartGame"
+                  >
+                    Deal Next Hand
+                  </button>
+                  <div v-else class="waiting-text">Waiting for the host to deal the next hand…</div>
+                </div>
+              </div>
+            </div>
+          </transition>
         </div>
       </div>
     </transition>
@@ -108,10 +184,6 @@
           <div class="table-glow"></div>
 
           <div class="pot-info" aria-live="polite">
-            <div class="round-chip">
-              <span class="round-phase">{{ phaseLabel }}</span>
-              <span v-if="phaseDescription" class="round-detail">{{ phaseDescription }}</span>
-            </div>
             <span class="label">Pot</span>
             <span class="value">${{ gameStore.totalPot }}</span>
             <span class="call" v-if="callAmount > 0">To call ${{ callAmount }}</span>
@@ -174,7 +246,11 @@
                   <span class="chips">${{ seat.player.chips }}</span>
                 </div>
                 <div class="seat-body">
-                  <div class="last-action" v-if="seat.player.lastAction && !seat.player.folded">
+                  <div
+                    class="last-action"
+                    :class="getActionClass(seat.player.lastAction)"
+                    v-if="seat.player.lastAction && !seat.player.folded"
+                  >
                     {{ formatPlayerAction(seat.player.lastAction) }}
                   </div>
                   <div class="bet-stack" v-if="seat.player.currentBet > 0 && !seat.player.folded">
@@ -206,65 +282,6 @@
             </div>
           </div>
         </div>
-
-
-        <transition name="showdown-summary">
-          <div v-if="showShowdownSummary" class="showdown-summary" aria-live="polite">
-            <div class="summary-header">
-              <h3>Showdown</h3>
-              <span class="summary-pot">Pot ${{ showdownPot }}</span>
-            </div>
-            <div class="summary-board">
-              <div
-                v-for="(card, index) in paddedCommunityCards"
-                :key="`showdown-board-${index}`"
-                class="card-slot"
-                :class="{ revealed: !!card }"
-              >
-                <span
-                  v-if="card"
-                  class="card-face"
-                  :class="getCardColor(card.suit)"
-                >
-                  {{ card.suit }}{{ card.rank }}
-                </span>
-                <div v-else class="card-back small"></div>
-              </div>
-            </div>
-            <div class="summary-players">
-              <div
-                v-for="player in showdownPlayers"
-                :key="`showdown-player-${player.id}`"
-                class="summary-player"
-                :class="{ winner: player.isWinner }"
-              >
-                <div class="player-meta">
-                  <span class="player-name">{{ player.name }}</span>
-                  <span v-if="player.bestHand?.rankName" class="player-hand">{{ player.bestHand.rankName }}</span>
-                  <span v-else class="player-hand muted">Revealed</span>
-                </div>
-                <div class="player-cards">
-                  <div
-                    v-for="(card, cIndex) in player.cards"
-                    :key="`showdown-card-${player.id}-${cIndex}`"
-                    class="card-slot"
-                    :class="{ revealed: !!card?.rank }"
-                  >
-                    <span
-                      v-if="card?.rank"
-                      class="card-face"
-                      :class="getCardColor(card.suit)"
-                    >
-                      {{ card.suit }}{{ card.rank }}
-                    </span>
-                    <div v-else class="card-back small"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </transition>
-
         <div class="table-footer">
           <div
             v-if="gameStore.gamePhase === 'waiting' || (gameStore.gamePhase === 'showdown' && gameStore.gameFinished)"
@@ -336,7 +353,11 @@
                 </div>
               </div>
               <div class="panel-status">
-                <div class="status-line" v-if="myPlayer.lastAction">
+                <div
+                  class="status-line"
+                  :class="getActionClass(myPlayer.lastAction)"
+                  v-if="myPlayer.lastAction"
+                >
                   {{ formatPlayerAction(myPlayer.lastAction) }}
                 </div>
                 <div class="status-line" v-else>
@@ -488,15 +509,15 @@ const cleanupSocketListeners = () => {
 }
 
 const opponentSeatClasses = [
-  'seat-0',
-  'seat-1',
-  'seat-2',
-  'seat-3',
-  'seat-4',
-  'seat-5',
-  'seat-6',
-  'seat-7',
-  'seat-8'
+  'seat-bottom-right',
+  'seat-right-lower',
+  'seat-right-upper',
+  'seat-top-right',
+  'seat-top-center',
+  'seat-top-left',
+  'seat-left-upper',
+  'seat-left-lower',
+  'seat-bottom-left'
 ]
 
 const userId = computed(() => userStore.user?.id ?? null)
@@ -731,22 +752,43 @@ watch(
 
 const getCardColor = (suit) => (suit === '♥' || suit === '♦' ? 'red' : 'black')
 
+const resolveActionKey = (action) => {
+  if (!action) return ''
+  if (typeof action === 'string') return action
+  return action?.action || action?.type || ''
+}
+
+const normalizeActionKey = (rawKey) => (rawKey || '').toString().toLowerCase().replace(/-/g, '_')
+
 const formatPlayerAction = (action) => {
-  const key = typeof action === 'string' ? action : action?.action || action?.type
+  const key = normalizeActionKey(resolveActionKey(action))
   if (!key) return ''
   const map = {
     call: 'Called',
     raise: 'Raised',
     bet: 'Bet',
     fold: 'Folded',
-    check: 'Checked',
+    check: '✔ Checked',
     all_in: 'All-in',
     small_blind: 'Posted small blind',
     big_blind: 'Posted big blind'
   }
-  const label = map[key] || key.toUpperCase()
+  const label = map[key] || key.replace(/_/g, ' ').toUpperCase()
   const amount = typeof action === 'object' && action?.amount ? ` $${action.amount}` : ''
   return `${label}${amount}`
+}
+
+const getActionClass = (action) => {
+  const key = normalizeActionKey(resolveActionKey(action))
+  const map = {
+    check: 'action-check',
+    call: 'action-call',
+    raise: 'action-raise',
+    bet: 'action-raise',
+    fold: 'action-fold',
+    all_in: 'action-all-in'
+  }
+  return map[key] || ''
 }
 
 const shouldRevealPlayerCard = (player, index) => {
@@ -1172,6 +1214,18 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .game-screen {
   min-height: 100vh;
   display: flex;
@@ -1427,7 +1481,7 @@ onBeforeUnmount(() => {
 }
 
 .table-area {
-  flex: 1.8;
+  flex: 2.3;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -1452,6 +1506,18 @@ onBeforeUnmount(() => {
   border-radius: 180px;
   border: 1px dashed rgba(148, 163, 184, 0.2);
   pointer-events: none;
+}
+
+.round-indicator {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  pointer-events: none;
+  z-index: 50;
 }
 
 .pot-info {
@@ -1481,12 +1547,13 @@ onBeforeUnmount(() => {
   gap: 0.15rem;
   padding: 0.35rem 0.9rem;
   border-radius: 999px;
-  background: rgba(30, 41, 59, 0.85);
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.45);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.75rem;
   color: rgba(226, 232, 240, 0.9);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.45);
 }
 
 .round-phase {
@@ -1532,16 +1599,18 @@ onBeforeUnmount(() => {
   width: 70px;
   height: 98px;
   border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.78);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.4);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.45);
 }
 
 .card-slot.revealed {
-  background: rgba(15, 23, 42, 0.8);
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.45);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.28);
 }
 
 .card-face {
@@ -1551,11 +1620,11 @@ onBeforeUnmount(() => {
 }
 
 .card-face.red {
-  color: #f87171;
+  color: #dc2626;
 }
 
 .card-face.black {
-  color: #f8fafc;
+  color: #111827;
 }
 
 .dealer-chip {
@@ -1572,6 +1641,52 @@ onBeforeUnmount(() => {
   box-shadow: 0 12px 25px rgba(250, 204, 21, 0.4);
   border: 2px solid rgba(255, 255, 255, 0.7);
   pointer-events: none;
+}
+
+.dealer-chip.seat-bottom-right {
+  bottom: 22%;
+  right: 18%;
+}
+
+.dealer-chip.seat-right-lower {
+  bottom: 38%;
+  right: 10%;
+}
+
+.dealer-chip.seat-right-upper {
+  top: 38%;
+  right: 10%;
+}
+
+.dealer-chip.seat-top-right {
+  top: 22%;
+  right: 20%;
+}
+
+.dealer-chip.seat-top-center {
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.dealer-chip.seat-top-left {
+  top: 22%;
+  left: 20%;
+}
+
+.dealer-chip.seat-left-upper {
+  top: 38%;
+  left: 10%;
+}
+
+.dealer-chip.seat-left-lower {
+  bottom: 38%;
+  left: 10%;
+}
+
+.dealer-chip.seat-bottom-left {
+  bottom: 22%;
+  left: 18%;
 }
 
 .player-layer {
@@ -1622,6 +1737,21 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+.last-action.action-check,
+.status-line.action-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.18);
+  color: #0ea5e9;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 0 14px rgba(14, 165, 233, 0.35);
+}
+
 .bet-stack {
   color: rgba(125, 211, 252, 0.95);
 }
@@ -1635,8 +1765,14 @@ onBeforeUnmount(() => {
   width: 46px;
   height: 64px;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.hole-cards .card-slot.revealed {
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.45);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25);
 }
 
 .seat.me .seat-frame {
@@ -1706,15 +1842,15 @@ onBeforeUnmount(() => {
   border-color: rgba(250, 204, 21, 0.6);
 }
 
-.seat-0 { top: 4%; left: 50%; transform: translateX(-50%); }
-.seat-1 { top: 10%; left: 24%; }
-.seat-2 { top: 10%; right: 24%; }
-.seat-3 { top: 24%; left: 8%; }
-.seat-4 { top: 24%; right: 8%; }
-.seat-5 { top: 46%; left: 4%; }
-.seat-6 { top: 46%; right: 4%; }
-.seat-7 { bottom: 18%; right: 12%; }
-.seat-8 { bottom: 18%; left: 12%; }
+.seat-bottom-right { bottom: 12%; right: 14%; }
+.seat-right-lower { bottom: 28%; right: 6%; }
+.seat-right-upper { top: 28%; right: 6%; }
+.seat-top-right { top: 12%; right: 16%; }
+.seat-top-center { top: 6%; left: 50%; transform: translateX(-50%); }
+.seat-top-left { top: 12%; left: 16%; }
+.seat-left-upper { top: 28%; left: 6%; }
+.seat-left-lower { bottom: 28%; left: 6%; }
+.seat-bottom-left { bottom: 12%; left: 14%; }
 
 .my-seat {
   bottom: 6%;
@@ -1760,103 +1896,146 @@ onBeforeUnmount(() => {
   margin-top: 1.75rem;
 }
 
-.showdown-summary {
-  margin-top: 1.1rem;
-  padding: 1rem 1.1rem;
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 18px;
+.showdown-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  z-index: 6;
+}
+
+.showdown-card {
+  width: min(760px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.9);
+  border-radius: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.6);
+  padding: 1.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.35);
+  gap: 1.5rem;
 }
-.showdown-summary .summary-header {
+
+.showdown-card .summary-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  color: #f8fafc;
-  font-weight: 600;
+  align-items: flex-start;
+  gap: 1rem;
 }
-.showdown-summary .summary-header h3 {
+
+.showdown-card .summary-header h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.4rem;
 }
-.showdown-summary .summary-pot {
-  color: #facc15;
-  font-size: 0.95rem;
-}
-.showdown-summary .summary-board {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: center;
-}
-.showdown-summary .summary-board .card-slot {
-  width: 50px;
-  height: 70px;
-}
-.showdown-summary .summary-board .card-face {
+
+.showdown-card .summary-subtitle {
+  margin: 0.35rem 0 0;
+  color: rgba(226, 232, 240, 0.7);
   font-size: 0.9rem;
 }
-.showdown-summary .summary-players {
+
+.showdown-card .summary-pot {
+  color: #facc15;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.showdown-card .summary-board {
   display: flex;
-  flex-wrap: wrap;
   gap: 0.75rem;
   justify-content: center;
 }
-.showdown-summary .summary-player {
-  min-width: 150px;
-  padding: 0.7rem;
-  border-radius: 12px;
+
+.showdown-card .summary-board .card-slot {
+  width: 60px;
+  height: 84px;
+}
+
+.showdown-card .summary-board .card-face {
+  font-size: 1rem;
+}
+
+.showdown-card .summary-players {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.showdown-card .summary-player {
+  border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(30, 41, 59, 0.65);
+  background: rgba(30, 41, 59, 0.7);
+  padding: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.75rem;
   align-items: center;
   text-align: center;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.showdown-summary .summary-player.winner {
-  border-color: rgba(250, 204, 21, 0.7);
-  box-shadow: 0 12px 32px rgba(250, 204, 21, 0.25);
+
+.showdown-card .summary-player.winner {
+  border-color: rgba(250, 204, 21, 0.75);
+  box-shadow: 0 16px 34px rgba(250, 204, 21, 0.25);
 }
-.showdown-summary .player-meta {
+
+.showdown-card .player-meta {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.35rem;
   color: #e2e8f0;
 }
-.showdown-summary .player-hand {
-  font-size: 0.85rem;
+
+.showdown-card .player-hand {
+  font-size: 0.9rem;
   color: rgba(148, 163, 184, 0.85);
 }
-.showdown-summary .player-hand.muted {
-  color: rgba(148, 163, 184, 0.55);
+
+.showdown-card .player-hand.muted {
+  color: rgba(148, 163, 184, 0.6);
 }
-.showdown-summary .player-cards {
+
+.showdown-card .player-cards {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.5rem;
   justify-content: center;
 }
-.showdown-summary .player-cards .card-slot {
+
+.showdown-card .player-cards .card-slot {
   width: 48px;
-  height: 64px;
+  height: 68px;
 }
-.showdown-summary .player-cards .card-face {
-  font-size: 0.85rem;
+
+.showdown-card .player-cards .card-face {
+  font-size: 0.95rem;
 }
-.card-back.small {
-  border-radius: 8px;
+
+.showdown-card .summary-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
+
+.showdown-card .waiting-text {
+  color: rgba(226, 232, 240, 0.8);
+  font-size: 0.95rem;
+}
+
 .showdown-summary-enter-active,
 .showdown-summary-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
+
 .showdown-summary-enter-from,
 .showdown-summary-leave-to {
   opacity: 0;
-  transform: translateY(10px);
+  transform: scale(0.98);
 }
 .footer-waiting {
   display: flex;
@@ -1970,7 +2149,7 @@ onBeforeUnmount(() => {
   width: 76px;
   height: 108px;
   border-radius: 14px;
-  background: rgba(30, 41, 59, 0.85);
+  background: rgba(15, 23, 42, 0.88);
   border: 1px solid rgba(148, 163, 184, 0.34);
   box-shadow: 0 18px 32px rgba(15, 23, 42, 0.45);
   display: flex;
@@ -1979,8 +2158,9 @@ onBeforeUnmount(() => {
 }
 
 .player-card.revealed {
-  background: rgba(15, 23, 42, 0.15);
-  border-color: rgba(148, 163, 184, 0.55);
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.5);
+  box-shadow: 0 20px 32px rgba(15, 23, 42, 0.28);
 }
 
 .card-face.large {
@@ -1991,13 +2171,43 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   border-radius: 10px;
-  border: 2px solid rgba(148, 163, 184, 0.45);
-  background: linear-gradient(135deg, rgba(96, 165, 250, 0.25), rgba(56, 189, 248, 0.55));
-  box-shadow: inset 0 0 18px rgba(15, 23, 42, 0.4);
+  border: 2px solid rgba(248, 250, 252, 0.7);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.3), transparent 50%),
+    radial-gradient(circle at 80% 30%, rgba(255, 255, 255, 0.2), transparent 48%),
+    linear-gradient(135deg, rgba(30, 64, 175, 0.95), rgba(220, 38, 38, 0.85));
+  box-shadow: inset 0 0 22px rgba(15, 23, 42, 0.45), 0 12px 22px rgba(15, 23, 42, 0.35);
+  position: relative;
+  overflow: hidden;
 }
 
 .card-back.large {
   border-radius: 14px;
+}
+
+.card-back::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: inherit;
+  border: 1px solid rgba(248, 250, 252, 0.4);
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(248, 250, 252, 0.2) 0,
+    rgba(248, 250, 252, 0.2) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  mix-blend-mode: screen;
+}
+
+.card-back::after {
+  content: '';
+  position: absolute;
+  inset: 16px;
+  border-radius: inherit;
+  border: 2px solid rgba(248, 250, 252, 0.35);
+  box-shadow: inset 0 0 12px rgba(15, 23, 42, 0.4);
 }
 
 .panel-status {
@@ -2076,7 +2286,9 @@ onBeforeUnmount(() => {
 }
 
 .sidebar {
-  flex: 1;
+  flex: 0.75;
+  max-width: 320px;
+  min-width: 260px;
   display: grid;
   gap: 1rem;
   grid-template-rows: min-content min-content 1fr 1fr;
@@ -2387,15 +2599,22 @@ onBeforeUnmount(() => {
   .table-felt {
     aspect-ratio: 4 / 3;
   }
+  .round-indicator {
+    bottom: 1rem;
+    left: 1rem;
+  }
   .seat {
     width: 150px;
   }
-  .seat-0 { top: 6%; left: 8%; }
-  .seat-1 { top: 2%; left: 50%; transform: translateX(-50%); }
-  .seat-2 { top: 6%; right: 8%; }
-  .seat-3 { bottom: 16%; right: 6%; }
-  .seat-4 { bottom: 8%; left: 50%; transform: translateX(-50%); }
-  .seat-5 { bottom: 16%; left: 6%; }
+  .seat-bottom-right { bottom: 10%; right: 8%; }
+  .seat-right-lower { bottom: 28%; right: 4%; }
+  .seat-right-upper { top: 26%; right: 4%; }
+  .seat-top-right { top: 10%; right: 12%; }
+  .seat-top-center { top: 4%; left: 50%; transform: translateX(-50%); }
+  .seat-top-left { top: 10%; left: 12%; }
+  .seat-left-upper { top: 26%; left: 4%; }
+  .seat-left-lower { bottom: 28%; left: 4%; }
+  .seat-bottom-left { bottom: 10%; left: 8%; }
 }
 
 .modal-overlay {
