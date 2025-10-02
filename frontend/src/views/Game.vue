@@ -1645,8 +1645,9 @@ onBeforeUnmount(() => {
 }
 
 .seat.active .seat-frame {
-  border-color: #f59e0b;
-  box-shadow: 0 24px 60px rgba(245, 158, 11, 0.4);
+  border-color: #facc15;
+  border-width: 2px;
+  box-shadow: 0 24px 60px rgba(250, 204, 21, 0.45);
   background: rgba(30, 41, 59, 0.92);
 }
 
