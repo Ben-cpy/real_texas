@@ -107,11 +107,14 @@
         <div class="table-felt">
           <div class="table-glow"></div>
 
-          <div class="pot-info" aria-live="polite">
+          <div class="round-display" aria-live="polite">
             <div class="round-chip">
               <span class="round-phase">{{ phaseLabel }}</span>
               <span v-if="phaseDescription" class="round-detail">{{ phaseDescription }}</span>
             </div>
+          </div>
+
+          <div class="pot-info" aria-live="polite">
             <span class="label">Pot</span>
             <span class="value">${{ gameStore.totalPot }}</span>
             <span class="call" v-if="callAmount > 0">To call ${{ callAmount }}</span>
@@ -174,7 +177,11 @@
                   <span class="chips">${{ seat.player.chips }}</span>
                 </div>
                 <div class="seat-body">
-                  <div class="last-action" v-if="seat.player.lastAction && !seat.player.folded">
+                  <div
+                    class="last-action"
+                    :class="getActionClass(seat.player.lastAction)"
+                    v-if="seat.player.lastAction && !seat.player.folded"
+                  >
                     {{ formatPlayerAction(seat.player.lastAction) }}
                   </div>
                   <div class="bet-stack" v-if="seat.player.currentBet > 0 && !seat.player.folded">
@@ -336,7 +343,11 @@
                 </div>
               </div>
               <div class="panel-status">
-                <div class="status-line" v-if="myPlayer.lastAction">
+                <div
+                  class="status-line"
+                  :class="getActionClass(myPlayer.lastAction)"
+                  v-if="myPlayer.lastAction"
+                >
                   {{ formatPlayerAction(myPlayer.lastAction) }}
                 </div>
                 <div class="status-line" v-else>
@@ -731,22 +742,43 @@ watch(
 
 const getCardColor = (suit) => (suit === '♥' || suit === '♦' ? 'red' : 'black')
 
+const resolveActionKey = (action) => {
+  if (!action) return ''
+  if (typeof action === 'string') return action
+  return action?.action || action?.type || ''
+}
+
+const normalizeActionKey = (rawKey) => (rawKey || '').toString().toLowerCase().replace(/-/g, '_')
+
 const formatPlayerAction = (action) => {
-  const key = typeof action === 'string' ? action : action?.action || action?.type
+  const key = normalizeActionKey(resolveActionKey(action))
   if (!key) return ''
   const map = {
     call: 'Called',
     raise: 'Raised',
     bet: 'Bet',
     fold: 'Folded',
-    check: 'Checked',
+    check: '✔ Checked',
     all_in: 'All-in',
     small_blind: 'Posted small blind',
     big_blind: 'Posted big blind'
   }
-  const label = map[key] || key.toUpperCase()
+  const label = map[key] || key.replace(/_/g, ' ').toUpperCase()
   const amount = typeof action === 'object' && action?.amount ? ` $${action.amount}` : ''
   return `${label}${amount}`
+}
+
+const getActionClass = (action) => {
+  const key = normalizeActionKey(resolveActionKey(action))
+  const map = {
+    check: 'action-check',
+    call: 'action-call',
+    raise: 'action-raise',
+    bet: 'action-raise',
+    fold: 'action-fold',
+    all_in: 'action-all-in'
+  }
+  return map[key] || ''
 }
 
 const shouldRevealPlayerCard = (player, index) => {
@@ -1454,6 +1486,18 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
+.round-display {
+  position: absolute;
+  bottom: 6%;
+  left: 6%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  pointer-events: none;
+  z-index: 3;
+}
+
 .pot-info {
   position: absolute;
   top: 6%;
@@ -1481,12 +1525,13 @@ onBeforeUnmount(() => {
   gap: 0.15rem;
   padding: 0.35rem 0.9rem;
   border-radius: 999px;
-  background: rgba(30, 41, 59, 0.85);
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.45);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.75rem;
   color: rgba(226, 232, 240, 0.9);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.45);
 }
 
 .round-phase {
@@ -1532,16 +1577,18 @@ onBeforeUnmount(() => {
   width: 70px;
   height: 98px;
   border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.78);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.4);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.45);
 }
 
 .card-slot.revealed {
-  background: rgba(15, 23, 42, 0.8);
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.45);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.28);
 }
 
 .card-face {
@@ -1551,11 +1598,11 @@ onBeforeUnmount(() => {
 }
 
 .card-face.red {
-  color: #f87171;
+  color: #dc2626;
 }
 
 .card-face.black {
-  color: #f8fafc;
+  color: #111827;
 }
 
 .dealer-chip {
@@ -1622,6 +1669,21 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+.last-action.action-check,
+.status-line.action-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.18);
+  color: #0ea5e9;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 0 14px rgba(14, 165, 233, 0.35);
+}
+
 .bet-stack {
   color: rgba(125, 211, 252, 0.95);
 }
@@ -1635,8 +1697,14 @@ onBeforeUnmount(() => {
   width: 46px;
   height: 64px;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.hole-cards .card-slot.revealed {
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.45);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25);
 }
 
 .seat.me .seat-frame {
@@ -1843,6 +1911,10 @@ onBeforeUnmount(() => {
   width: 48px;
   height: 64px;
 }
+.showdown-summary .card-slot.revealed,
+.showdown-summary .player-cards .card-slot.revealed {
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.2);
+}
 .showdown-summary .player-cards .card-face {
   font-size: 0.85rem;
 }
@@ -1970,7 +2042,7 @@ onBeforeUnmount(() => {
   width: 76px;
   height: 108px;
   border-radius: 14px;
-  background: rgba(30, 41, 59, 0.85);
+  background: rgba(15, 23, 42, 0.88);
   border: 1px solid rgba(148, 163, 184, 0.34);
   box-shadow: 0 18px 32px rgba(15, 23, 42, 0.45);
   display: flex;
@@ -1979,8 +2051,9 @@ onBeforeUnmount(() => {
 }
 
 .player-card.revealed {
-  background: rgba(15, 23, 42, 0.15);
-  border-color: rgba(148, 163, 184, 0.55);
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.5);
+  box-shadow: 0 20px 32px rgba(15, 23, 42, 0.28);
 }
 
 .card-face.large {
@@ -1991,13 +2064,43 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   border-radius: 10px;
-  border: 2px solid rgba(148, 163, 184, 0.45);
-  background: linear-gradient(135deg, rgba(96, 165, 250, 0.25), rgba(56, 189, 248, 0.55));
-  box-shadow: inset 0 0 18px rgba(15, 23, 42, 0.4);
+  border: 2px solid rgba(248, 250, 252, 0.7);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.3), transparent 50%),
+    radial-gradient(circle at 80% 30%, rgba(255, 255, 255, 0.2), transparent 48%),
+    linear-gradient(135deg, rgba(30, 64, 175, 0.95), rgba(220, 38, 38, 0.85));
+  box-shadow: inset 0 0 22px rgba(15, 23, 42, 0.45), 0 12px 22px rgba(15, 23, 42, 0.35);
+  position: relative;
+  overflow: hidden;
 }
 
 .card-back.large {
   border-radius: 14px;
+}
+
+.card-back::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: inherit;
+  border: 1px solid rgba(248, 250, 252, 0.4);
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(248, 250, 252, 0.2) 0,
+    rgba(248, 250, 252, 0.2) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  mix-blend-mode: screen;
+}
+
+.card-back::after {
+  content: '';
+  position: absolute;
+  inset: 16px;
+  border-radius: inherit;
+  border: 2px solid rgba(248, 250, 252, 0.35);
+  box-shadow: inset 0 0 12px rgba(15, 23, 42, 0.4);
 }
 
 .panel-status {
@@ -2386,6 +2489,10 @@ onBeforeUnmount(() => {
   }
   .table-felt {
     aspect-ratio: 4 / 3;
+  }
+  .round-display {
+    bottom: 3%;
+    left: 4%;
   }
   .seat {
     width: 150px;

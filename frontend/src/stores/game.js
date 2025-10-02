@@ -27,6 +27,23 @@ export const useGameStore = defineStore('game', () => {
   const isAuthenticated = ref(false)
   const error = ref(null)
 
+  const normalizePlayers = (list = []) => {
+    if (!Array.isArray(list)) return []
+
+    return [...list].sort((a, b) => {
+      const seatA = Number.isInteger(a?.seatIndex) ? a.seatIndex : Number.MAX_SAFE_INTEGER
+      const seatB = Number.isInteger(b?.seatIndex) ? b.seatIndex : Number.MAX_SAFE_INTEGER
+
+      if (seatA !== seatB) {
+        return seatA - seatB
+      }
+
+      const idA = (a?.id || '').toString()
+      const idB = (b?.id || '').toString()
+      return idA.localeCompare(idB)
+    })
+  }
+
   // Computed
   const isMyTurn = computed(() => {
     if (
@@ -194,7 +211,7 @@ export const useGameStore = defineStore('game', () => {
 
   function handlePlayerListUpdated(data) {
     if (data && Array.isArray(data.players)) {
-      players.value = data.players
+      players.value = normalizePlayers(data.players)
     }
     if (data && typeof data.desiredSeatCount === 'number') {
       desiredSeatCount.value = data.desiredSeatCount
@@ -275,7 +292,7 @@ export const useGameStore = defineStore('game', () => {
    * @param {Object} state - Game state
    */
   function updateGameState(state) {
-    if (state.players) players.value = state.players
+    if (state.players) players.value = normalizePlayers(state.players)
     if (state.communityCards) communityCards.value = state.communityCards
     if (state.pot !== undefined) pot.value = state.pot
     if (state.currentBet !== undefined) currentBet.value = state.currentBet

@@ -242,6 +242,7 @@ function getPlayerSnapshot(player, phase) {
   return {
     id: player.id,
     name: player.name,
+    seatIndex: Number.isInteger(player.seatIndex) ? player.seatIndex : null,
     chips: player.chips,
     currentBet: player.currentBet,
     totalBet: player.totalBet,
@@ -295,6 +296,66 @@ export class PokerGame {
     this.latestResults = null
   }
 
+  captureSeatAnchors() {
+    return {
+      dealer: this.players[this.dealerIndex]?.id ?? null,
+      current: this.players[this.currentPlayerIndex]?.id ?? null,
+      smallBlind: this.players[this.smallBlindIndex]?.id ?? null,
+      bigBlind: this.players[this.bigBlindIndex]?.id ?? null
+    }
+  }
+
+  ensureSeatAssignments() {
+    const used = new Set()
+    this.players.forEach((player, index) => {
+      let seat = Number.isInteger(player.seatIndex) ? player.seatIndex : index
+      while (used.has(seat)) {
+        seat += 1
+      }
+      player.seatIndex = seat
+      used.add(seat)
+    })
+  }
+
+  getNextAvailableSeatIndex() {
+    this.ensureSeatAssignments()
+    const used = new Set(this.players.map((player) => player.seatIndex))
+    for (let seat = 0; seat < this.maxPlayers; seat++) {
+      if (!used.has(seat)) {
+        return seat
+      }
+    }
+    return this.players.length
+  }
+
+  sortPlayersBySeat(anchors = null) {
+    if (this.players.length === 0) {
+      this.dealerIndex = 0
+      this.currentPlayerIndex = -1
+      this.smallBlindIndex = -1
+      this.bigBlindIndex = -1
+      return
+    }
+
+    const reference = anchors || this.captureSeatAnchors()
+
+    this.players.sort((a, b) => {
+      const seatA = Number.isInteger(a.seatIndex) ? a.seatIndex : Number.MAX_SAFE_INTEGER
+      const seatB = Number.isInteger(b.seatIndex) ? b.seatIndex : Number.MAX_SAFE_INTEGER
+      if (seatA !== seatB) {
+        return seatA - seatB
+      }
+      return a.id.localeCompare(b.id)
+    })
+
+    const findIndexById = (id) => (id ? this.players.findIndex((player) => player.id === id) : -1)
+
+    this.dealerIndex = findIndexById(reference.dealer)
+    this.currentPlayerIndex = findIndexById(reference.current)
+    this.smallBlindIndex = findIndexById(reference.smallBlind)
+    this.bigBlindIndex = findIndexById(reference.bigBlind)
+  }
+
   addPlayer(player) {
     if (this.players.length >= this.maxPlayers) {
       return false
@@ -305,6 +366,9 @@ export class PokerGame {
     }
 
     const initialChips = Number.isFinite(player.chips) ? player.chips : 1000
+
+    const anchors = this.captureSeatAnchors()
+    const seatIndex = this.getNextAvailableSeatIndex()
 
     this.players.push({
       id: player.id,
@@ -322,8 +386,11 @@ export class PokerGame {
       hasActedThisRound: false,
       handRank: null,
       bestHand: null,
-      initialChips
+      initialChips,
+      seatIndex
     })
+
+    this.sortPlayersBySeat(anchors)
 
     return true
   }
@@ -352,8 +419,7 @@ export class PokerGame {
         if (this.players.length - 1 < Math.max(MIN_SEAT_COUNT, this.countRealPlayers())) {
           return false
         }
-        this.players.splice(i, 1)
-        return true
+        return this.removePlayer(this.players[i].id)
       }
     }
     return false
@@ -407,11 +473,34 @@ export class PokerGame {
     if (index === -1) {
       return false
     }
+    const anchors = this.captureSeatAnchors()
+    const removedPlayer = this.players[index]
+
+    if (anchors.dealer === removedPlayer.id) {
+      anchors.dealer = null
+    }
+    if (anchors.current === removedPlayer.id) {
+      anchors.current = null
+    }
+    if (anchors.smallBlind === removedPlayer.id) {
+      anchors.smallBlind = null
+    }
+    if (anchors.bigBlind === removedPlayer.id) {
+      anchors.bigBlind = null
+    }
 
     this.players.splice(index, 1)
+    this.sortPlayersBySeat(anchors)
 
-    if (this.gameStarted && index <= this.currentPlayerIndex) {
-      this.currentPlayerIndex = Math.max(0, this.currentPlayerIndex - 1)
+    if (this.gameStarted && anchors.current === null) {
+      if (this.players.length === 0) {
+        this.currentPlayerIndex = -1
+      } else {
+        const start = ((index - 1) % this.players.length + this.players.length) % this.players.length
+        this.currentPlayerIndex = this.findNextIndex(start, (player) =>
+          player && player.active && !player.folded && player.chips > 0
+        )
+      }
     }
 
     return true
@@ -435,6 +524,8 @@ export class PokerGame {
   }
 
   beginHand() {
+    this.ensureSeatAssignments()
+    this.sortPlayersBySeat()
     this.ensureDealerIndex()
     this.deck.reset()
     this.communityCards = []
@@ -1359,6 +1450,9 @@ export class PokerGame {
   }
 
   getGameState() {
+    this.ensureSeatAssignments()
+    this.sortPlayersBySeat()
+
     return {
       roomId: this.roomId,
       phase: this.phase,
@@ -1382,12 +1476,16 @@ export class PokerGame {
   }
 
   getPlayers() {
+    this.ensureSeatAssignments()
+    this.sortPlayersBySeat()
+
     return this.players.map((player) => ({
       id: player.id,
       name: player.name,
       chips: player.chips,
       active: player.active,
-      isAI: player.isAI || false
+      isAI: player.isAI || false,
+      seatIndex: Number.isInteger(player.seatIndex) ? player.seatIndex : null
     }))
   }
 
