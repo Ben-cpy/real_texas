@@ -583,8 +583,9 @@ const dealerSeatClass = computed(() => {
   const dealer = players[dealerIndex.value]
   if (!dealer) return null
 
+  // Don't show dealer button for current user
   if (dealer.id === userId.value) {
-    return 'my-seat'
+    return null
   }
 
   const seat = opponentSeats.value.find((entry) => entry.player.id === dealer.id)
