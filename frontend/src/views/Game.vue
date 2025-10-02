@@ -499,49 +499,79 @@ const cleanupSocketListeners = () => {
   socketListeners.length = 0
 }
 
-const symmetricSeatBuckets = [
-  ['seat-left-upper', 'seat-right-upper'],
-  ['seat-left-lower', 'seat-right-lower'],
-  ['seat-top-left', 'seat-top-right'],
-  ['seat-bottom-left', 'seat-bottom-right']
-]
+/**
+ * Symmetrical + Clockwise Seat Layout Algorithm
+ *
+ * Visual layout from player's perspective (player at bottom center):
+ * - Left side (bottom to top): bottom-left, left-lower, left-upper, top-left
+ * - Center: top-center
+ * - Right side (top to bottom): top-right, right-upper, right-lower, bottom-right
+ *
+ * Clockwise order: left (↑) → center → right (↓)
+ *
+ * Distribution rules:
+ * - Even count: split evenly left/right (e.g., 4 players = 2 left + 2 right)
+ * - Odd count: split evenly + 1 center (e.g., 5 players = 2 left + 1 center + 2 right)
+ */
 
-const symmetricSeatPriority = [
-  'seat-top-center',
-  ...symmetricSeatBuckets.flat()
-]
-
-const buildSymmetricSeatLayout = (count) => {
+const buildSymmetricClockwiseSeatLayout = (count) => {
   if (count <= 0) return []
-  if (count >= symmetricSeatPriority.length) {
-    return [...symmetricSeatPriority]
+  if (count > 9) return [] // Max 9 other players (player is 10th)
+
+  // Define available seats
+  // Left side: bottom to top (already in clockwise order)
+  const leftSeats = ['bottom-left', 'left-lower', 'left-upper', 'top-left']
+  const centerSeat = 'top-center'
+  // Right side: top to bottom (continuing clockwise)
+  const rightSeats = ['top-right', 'right-upper', 'right-lower', 'bottom-right']
+
+  // Determine if we need center seat (odd count)
+  const hasCenter = count % 2 === 1
+  const sideCount = hasCenter ? Math.floor(count / 2) : count / 2
+
+  // Take 'sideCount' seats from left (from top positions, so take last N)
+  const selectedLeft = leftSeats.slice(-sideCount)
+
+  // Take 'sideCount' seats from right (from top positions, so take first N)
+  const selectedRight = rightSeats.slice(0, sideCount)
+
+  // Build clockwise layout: left (bottom→top) → center → right (top→bottom)
+  const layout = [...selectedLeft]
+
+  if (hasCenter) {
+    layout.push(centerSeat)
   }
 
-  const layout = []
+  layout.push(...selectedRight)
 
-  if (count % 2 === 1) {
-    layout.push('seat-top-center')
-  }
-
-  for (const bucket of symmetricSeatBuckets) {
-    if (layout.length >= count) break
-    for (const seat of bucket) {
-      if (layout.length >= count) break
-      layout.push(seat)
-    }
-  }
-
-  if (layout.length < count) {
-    for (const seat of symmetricSeatPriority) {
-      if (layout.length >= count) break
-      if (!layout.includes(seat)) {
-        layout.push(seat)
-      }
-    }
-  }
-
-  return layout.slice(0, count)
+  return layout.map(seat => `seat-${seat}`)
 }
+
+/**
+ * Expected layouts for different player counts:
+ *
+ * 2 players: [top-left, top-right]
+ * 3 players: [top-left, top-center, top-right]
+ * 4 players: [left-upper, top-left, top-right, right-upper]
+ * 5 players: [left-upper, top-left, top-center, top-right, right-upper]
+ * 6 players: [left-lower, left-upper, top-left, top-right, right-upper, right-lower]
+ * 7 players: [left-lower, left-upper, top-left, top-center, top-right, right-upper, right-lower]
+ * 8 players: [bottom-left, left-lower, left-upper, top-left, top-right, right-upper, right-lower, bottom-right]
+ * 9 players: [bottom-left, left-lower, left-upper, top-left, top-center, top-right, right-upper, right-lower, bottom-right]
+ */
+
+// Fallback seat order for edge cases
+const defaultSeatOrder = [
+  'seat-top-left',
+  'seat-top-center',
+  'seat-top-right',
+  'seat-right-upper',
+  'seat-right-lower',
+  'seat-bottom-right',
+  'seat-bottom-left',
+  'seat-left-lower',
+  'seat-left-upper'
+]
 
 const userId = computed(() => userStore.user?.id ?? null)
 const myPlayer = computed(() => gameStore.myPlayer ?? null)
@@ -558,9 +588,12 @@ const opponentSeats = computed(() => {
   const myIndex = players.findIndex((player) => player.id === userId.value)
   const assignments = []
   const total = players.length
-  const layout = buildSymmetricSeatLayout(Math.max(total - (myIndex === -1 ? 0 : 1), 0))
+  // Calculate number of other players (excluding current user)
+  const otherPlayerCount = Math.max(total - (myIndex === -1 ? 0 : 1), 0)
+  const layout = buildSymmetricClockwiseSeatLayout(otherPlayerCount)
   let seatCursor = 0
 
+  // Iterate through players in clockwise order starting from next player after current user
   for (let offset = 0; offset < total; offset++) {
     const idx = myIndex === -1 ? offset : (myIndex + 1 + offset) % total
     const player = players[idx]
