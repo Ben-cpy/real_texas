@@ -161,10 +161,14 @@
                 class="turn-indicator"
                 aria-hidden="true"
               >
-                <span class="indicator-dot"></span>
-                <span class="indicator-text">思考中</span>
+                <span class="indicator-icon">⏰</span>
+                <span class="indicator-text">Acting</span>
               </div>
               <div class="seat-frame">
+                <div v-if="seat.player.folded" class="fold-badge" aria-hidden="true">
+                  <span class="fold-icon">⛔</span>
+                  <span class="fold-text">Fold</span>
+                </div>
                 <div class="seat-header">
                   <span class="name">{{ seat.player.name }}</span>
                   <span class="chips">${{ seat.player.chips }}</span>
@@ -262,7 +266,10 @@
         </transition>
 
         <div class="table-footer">
-          <div v-if="gameStore.gamePhase === 'waiting'" class="footer-waiting">
+          <div
+            v-if="gameStore.gamePhase === 'waiting' || (gameStore.gamePhase === 'showdown' && gameStore.gameFinished)"
+            class="footer-waiting"
+          >
             <div class="host-controls" v-if="gameStore.isRoomCreator">
               <div class="host-label">You are the Host</div>
               <div class="controls-row">
@@ -304,6 +311,9 @@
                 </span>
                 <span v-else-if="gameStore.isMyTurn" class="call-highlight ready">
                   Your turn
+                </span>
+                <span v-if="myPlayer.folded" class="fold-flag" aria-hidden="true">
+                  ⛔ Folded
                 </span>
               </div>
             </div>
@@ -497,17 +507,28 @@ const tablePlayers = computed(() => gameStore.players || [])
 const dealerIndex = computed(() => (typeof gameStore.dealerIndex === 'number' ? gameStore.dealerIndex : -1))
 const opponentSeats = computed(() => {
   const players = tablePlayers.value || []
-  const seats = []
+  if (!players.length) {
+    return []
+  }
+
+  const myIndex = players.findIndex((player) => player.id === userId.value)
+  const assignments = []
+  const total = players.length
   let seatCursor = 0
 
-  for (const player of players) {
-    if (player.id === userId.value) continue
+  for (let offset = 0; offset < total; offset++) {
+    const idx = myIndex === -1 ? offset : (myIndex + 1 + offset) % total
+    const player = players[idx]
+    if (!player || player.id === userId.value) {
+      continue
+    }
+
     const seatClass = opponentSeatClasses[seatCursor % opponentSeatClasses.length]
-    seats.push({ player, seatClass })
+    assignments.push({ player, seatClass, orderIndex: seatCursor })
     seatCursor += 1
   }
 
-  return seats
+  return assignments
 })
 
 const dealerSeatClass = computed(() => {
@@ -524,6 +545,66 @@ const dealerSeatClass = computed(() => {
   const seat = opponentSeats.value.find((entry) => entry.player.id === dealer.id)
   return seat ? seat.seatClass : null
 })
+
+const showdownWinners = computed(() => gameStore.winners || [])
+
+const showdownPot = computed(() => {
+  if (gameStore.gamePhase !== 'showdown') {
+    return 0
+  }
+
+  const resolved = Number(gameStore.lastPot || 0)
+  if (resolved > 0) {
+    return resolved
+  }
+
+  const potFallbacks = [gameStore.totalPot, gameStore.pot]
+  for (const value of potFallbacks) {
+    const numeric = Number(value || 0)
+    if (numeric > 0) {
+      return numeric
+    }
+  }
+
+  return 0
+})
+
+const showdownPlayers = computed(() => {
+  if (gameStore.gamePhase !== 'showdown') {
+    return []
+  }
+
+  const winnerIds = new Set((showdownWinners.value || []).map((winner) => winner.id))
+
+  return (tablePlayers.value || [])
+    .filter((player) => player && player.active !== false && !player.folded)
+    .map((player) => {
+      const cards = Array.isArray(player.cards)
+        ? player.cards.map((card) => {
+            if (card && card.rank) {
+              return { suit: card.suit, rank: card.rank }
+            }
+            return null
+          })
+        : []
+
+      while (cards.length < 2) {
+        cards.push(null)
+      }
+
+      return {
+        id: player.id,
+        name: player.name,
+        cards,
+        bestHand: player.bestHand || null,
+        isWinner: winnerIds.has(player.id)
+      }
+    })
+})
+
+const showShowdownSummary = computed(
+  () => gameStore.gamePhase === 'showdown' && showdownPlayers.value.length > 0
+)
 
 const dealerName = computed(() => {
   if (!tablePlayers.value.length) {
@@ -562,7 +643,12 @@ const callAmount = computed(() => {
 const canCheck = computed(() => callAmount.value === 0)
 const canRaise = computed(() => gameStore.isMyTurn && (gameStore.myPlayer?.chips || 0) > 0)
 const canAddAI = computed(() => gameStore.gamePhase === 'waiting' && gameStore.players.length < maxSeatLimit.value)
-const canRemoveAI = computed(() =>  gameStore.gamePhase === 'waiting' &&  gameStore.aiPlayerCount > 0 &&  gameStore.players.length > MIN_SEAT_COUNT)
+const canRemoveAI = computed(
+  () =>
+    gameStore.gamePhase === 'waiting' &&
+    gameStore.aiPlayerCount > 0 &&
+    gameStore.players.length > MIN_SEAT_COUNT
+)
 
 const maxRaiseValue = computed(() => {
   const player = gameStore.myPlayer
@@ -984,7 +1070,7 @@ const setupSocketListeners = () => {
           soundService.playLose()
         }
       } else {
-        addLog('Hand finished. Preparing next hand…')
+        addLog('Hand finished. Awaiting next hand…')
       }
     },
     player_joined: (data) => {
@@ -1370,27 +1456,29 @@ onBeforeUnmount(() => {
 
 .pot-info {
   position: absolute;
-  top: 10%;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 6%;
+  left: 8%;
+  transform: none;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.75rem 1.2rem;
+  align-items: flex-start;
+  text-align: left;
+  gap: 0.35rem;
+  padding: 0.7rem 1.15rem;
   min-width: 210px;
   background: rgba(15, 23, 42, 0.78);
   border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.3);
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45);
   color: #e2e8f0;
+  z-index: 2;
 }
 
 .round-chip {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
+  align-items: flex-start;
+  gap: 0.15rem;
   padding: 0.35rem 0.9rem;
   border-radius: 999px;
   background: rgba(30, 41, 59, 0.85);
@@ -1500,6 +1588,7 @@ onBeforeUnmount(() => {
 }
 
 .seat-frame {
+  position: relative;
   background: rgba(15, 23, 42, 0.65);
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 18px;
@@ -1556,45 +1645,56 @@ onBeforeUnmount(() => {
 }
 
 .seat.active .seat-frame {
-  border-color: rgba(250, 204, 21, 0.85);
-  box-shadow: 0 20px 55px rgba(250, 204, 21, 0.35);
-  background: rgba(30, 41, 59, 0.9);
+  border-color: #f59e0b;
+  box-shadow: 0 24px 60px rgba(245, 158, 11, 0.4);
+  background: rgba(30, 41, 59, 0.92);
 }
 
 .turn-indicator {
   position: absolute;
-  left: -36px;
+  left: -44px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  color: #facc15;
-  font-size: 0.75rem;
+  gap: 0.3rem;
+  color: #fbbf24;
+  font-size: 0.78rem;
   pointer-events: none;
   letter-spacing: 0.08em;
 }
-.turn-indicator .indicator-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #facc15;
-  box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.45);
-  animation: pulse-dot 1.4s ease-out infinite;
+.turn-indicator .indicator-icon {
+  font-size: 1rem;
+  filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.55));
 }
 .turn-indicator .indicator-text {
-  font-weight: 600;
+  font-weight: 700;
+  text-transform: uppercase;
 }
-@keyframes pulse-dot {
-  0% {
-    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.45);
-  }
-  70% {
-    box-shadow: 0 0 0 12px rgba(250, 204, 21, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0);
-  }
+
+.fold-badge {
+  position: absolute;
+  top: -10px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.18);
+  border: 1px solid rgba(248, 113, 113, 0.7);
+  color: #fca5a5;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+}
+.fold-badge .fold-icon {
+  font-size: 0.8rem;
+}
+.fold-badge .fold-text {
+  font-size: 0.66rem;
 }
 
 .seat.folded {
@@ -1660,14 +1760,14 @@ onBeforeUnmount(() => {
 }
 
 .showdown-summary {
-  margin-top: 1.25rem;
-  padding: 1.25rem;
+  margin-top: 1.1rem;
+  padding: 1rem 1.1rem;
   background: rgba(15, 23, 42, 0.75);
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 18px;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.35);
 }
 .showdown-summary .summary-header {
@@ -1691,21 +1791,21 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 .showdown-summary .summary-board .card-slot {
-  width: 52px;
-  height: 72px;
+  width: 50px;
+  height: 70px;
 }
 .showdown-summary .summary-board .card-face {
-  font-size: 0.92rem;
+  font-size: 0.9rem;
 }
 .showdown-summary .summary-players {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 0.75rem;
   justify-content: center;
 }
 .showdown-summary .summary-player {
-  min-width: 160px;
-  padding: 0.75rem;
+  min-width: 150px;
+  padding: 0.7rem;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.25);
   background: rgba(30, 41, 59, 0.65);
@@ -1822,6 +1922,20 @@ onBeforeUnmount(() => {
 
 .chip-summary .bet {
   color: rgba(244, 114, 182, 0.85);
+}
+.chip-summary .fold-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  background: rgba(248, 113, 113, 0.15);
+  color: #fca5a5;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
 }
 
 .call-highlight {
@@ -2259,8 +2373,9 @@ onBeforeUnmount(() => {
 
 @media (max-width: 768px) {
   .turn-indicator {
-    left: -24px;
-    font-size: 0.7rem;
+    left: -30px;
+    font-size: 0.72rem;
+    gap: 0.25rem;
   }
   .game-screen {
     padding: 1rem;

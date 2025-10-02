@@ -21,6 +21,8 @@ export const useGameStore = defineStore('game', () => {
   const maxPlayers = ref(6)
   const winners = ref([])
   const lastAction = ref(null)
+  const gameFinished = ref(false)
+  const lastPot = ref(0)
   const isConnected = ref(false)
   const isAuthenticated = ref(false)
   const error = ref(null)
@@ -59,11 +61,11 @@ export const useGameStore = defineStore('game', () => {
 
   const canStartGame = computed(() => {
     const minimumSeats = Math.max(3, players.value.filter((p) => !p.isAI).length)
-    return (
-      isRoomCreator.value &&
-      gamePhase.value === 'waiting' &&
-      players.value.length >= minimumSeats
-    )
+    const hasPlayers = players.value.length >= minimumSeats
+    const waitingToStart = gamePhase.value === 'waiting'
+    const readyForNextHand = gamePhase.value === 'showdown' && gameFinished.value
+
+    return isRoomCreator.value && hasPlayers && (waitingToStart || readyForNextHand)
   })
 
   const activePlayers = computed(() => {
@@ -226,6 +228,8 @@ export const useGameStore = defineStore('game', () => {
 
   function handleGameStarted(data) {
     console.log('Game started:', data)
+    gameFinished.value = false
+    lastPot.value = 0
     if (data.gameState) {
       updateGameState(data.gameState)
     }
@@ -235,6 +239,9 @@ export const useGameStore = defineStore('game', () => {
     console.log('Game finished:', data)
     const winnerList = data.winners || data.results?.winners || (data.winner ? [data.winner] : [])
     winners.value = winnerList || []
+    const resolvedPot = data?.pot ?? data?.results?.pot ?? 0
+    lastPot.value = resolvedPot
+    gameFinished.value = true
     if (data.gameState) {
       updateGameState(data.gameState)
     } else if (data.results?.gameState) {
@@ -249,6 +256,8 @@ export const useGameStore = defineStore('game', () => {
     }
     winners.value = []
     lastAction.value = null
+    gameFinished.value = false
+    lastPot.value = 0
   }
 
   function handleActionError(data) {
@@ -275,6 +284,9 @@ export const useGameStore = defineStore('game', () => {
       gamePhase.value = state.phase
       if (state.phase !== 'showdown') {
         winners.value = []
+        if (!state.gameFinished) {
+          lastPot.value = 0
+        }
       }
     }
     if (state.currentPlayerIndex !== undefined)
@@ -284,6 +296,7 @@ export const useGameStore = defineStore('game', () => {
     if (state.bigBlind !== undefined) bigBlind.value = state.bigBlind
     if (state.desiredSeatCount !== undefined) desiredSeatCount.value = state.desiredSeatCount
     if (state.maxPlayers !== undefined) maxPlayers.value = state.maxPlayers
+    if (state.gameFinished !== undefined) gameFinished.value = state.gameFinished
   }
 
   /**
@@ -306,6 +319,8 @@ export const useGameStore = defineStore('game', () => {
     lastAction.value = null
     error.value = null
     desiredSeatCount.value = 6
+    gameFinished.value = false
+    lastPot.value = 0
   }
 
   /**
@@ -353,6 +368,8 @@ export const useGameStore = defineStore('game', () => {
     maxPlayers,
     winners,
     lastAction,
+    gameFinished,
+    lastPot,
     isConnected,
     isAuthenticated,
     error,
