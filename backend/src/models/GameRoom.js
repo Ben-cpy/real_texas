@@ -1,7 +1,7 @@
-import database from './database.js'
+﻿import database from './database.js'
 
 export class GameRoom {
-  static async create({ id, name, creatorId, maxPlayers = 6, smallBlind = 10, bigBlind = 20 }) {
+  static async create({ id, name, creatorId, maxPlayers = 10, smallBlind = 10, bigBlind = 20 }) {
     const sql = `
       INSERT INTO game_rooms (id, name, creator_id, max_players, small_blind, big_blind)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -92,7 +92,7 @@ export class GameRoom {
     return await database.all(sql, [creatorId])
   }
 
-  // 清理过期房间
+  // 娓呯悊杩囨湡鎴块棿
   static async cleanupExpiredRooms() {
     const sql = `
       DELETE FROM game_rooms 
@@ -102,7 +102,7 @@ export class GameRoom {
     return await database.run(sql)
   }
 
-  // 获取房间统计信息
+  // 鑾峰彇鎴块棿缁熻淇℃伅
   static async getRoomStats() {
     const sql = `
       SELECT 
@@ -115,3 +115,4 @@ export class GameRoom {
     return await database.get(sql)
   }
 }
+

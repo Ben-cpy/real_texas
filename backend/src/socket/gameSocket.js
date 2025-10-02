@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken'
+﻿import jwt from 'jsonwebtoken'
 import { User } from '../models/User.js'
 import { GameRoom } from '../models/GameRoom.js'
 import { PokerGame } from '../services/PokerGame.js'
@@ -6,6 +6,10 @@ import { checkAchievements, ACHIEVEMENTS } from '../services/achievements.js'
 
 // Store active game rooms
 const activeRooms = new Map()
+
+const DEFAULT_MAX_PLAYERS = 10
+const MIN_SEAT_COUNT = 4
+const DEFAULT_INITIAL_SEATS = 6
 
 const broadcastPlayerList = (io, roomId, game) => {
   if (!io) {
@@ -223,7 +227,7 @@ export const handleSocketConnection = (socket, io) => {
             id: roomId,
             name: 'Default Game Room',
             creatorId: socket.userId,
-            maxPlayers: 6,
+            maxPlayers: DEFAULT_MAX_PLAYERS,
             smallBlind: 10,
             bigBlind: 20
           })
@@ -237,7 +241,8 @@ export const handleSocketConnection = (socket, io) => {
 
       // Get or create game instance
       const isSinglePlayerRoom = roomId === 'default-room'
-      const maxSeatLimit = room.max_players || 6
+      const maxSeatLimit = room.max_players || DEFAULT_MAX_PLAYERS
+      const initialSeatTarget = Math.min(maxSeatLimit, DEFAULT_INITIAL_SEATS)
 
       // Get or create game instance
       let game = activeRooms.get(roomId)
@@ -246,7 +251,9 @@ export const handleSocketConnection = (socket, io) => {
           smallBlind: room.small_blind,
           bigBlind: room.big_blind,
           maxPlayers: room.max_players,
-          desiredSeatCount: isSinglePlayerRoom ? Math.min(maxSeatLimit, 6) : Math.max(3, Math.min(maxSeatLimit, 6))
+          desiredSeatCount: isSinglePlayerRoom
+            ? initialSeatTarget
+            : Math.max(MIN_SEAT_COUNT, initialSeatTarget)
         })
         game.singlePlayerMode = isSinglePlayerRoom
         activeRooms.set(roomId, game)
@@ -264,7 +271,7 @@ export const handleSocketConnection = (socket, io) => {
       })
 
       if (!success) {
-        socket.emit('error', { error: '无法加入房间' })
+        socket.emit('error', { error: '鏃犳硶鍔犲叆鎴块棿' })
         return
       }
 
@@ -273,11 +280,11 @@ export const handleSocketConnection = (socket, io) => {
 
       if (realPlayers.length === 1 && realPlayers[0].id === user.id) {
         await GameRoom.updateCreator(roomId, user.id)
-        console.log(`更新房间 ${roomId} 的房主为: ${user.username}`)
+        console.log(`鏇存柊鎴块棿 ${roomId} 鐨勬埧涓讳负: ${user.username}`)
       }
 
       if (isSinglePlayerRoom && typeof game.setDesiredSeatCount === 'function' && !game.gameStarted) {
-        game.setDesiredSeatCount(Math.min(game.maxPlayers || 6, 6))
+        game.setDesiredSeatCount(Math.max(MIN_SEAT_COUNT, Math.min(game.maxPlayers || DEFAULT_MAX_PLAYERS, DEFAULT_INITIAL_SEATS)))
       }
 
       socket.join(roomId)
@@ -301,20 +308,20 @@ export const handleSocketConnection = (socket, io) => {
 
       broadcastPlayerList(io, roomId, game)
 
-      console.log(`玩家 ${user.username} 加入房间 ${roomId}`)
+      console.log(`鐜╁ ${user.username} 鍔犲叆鎴块棿 ${roomId}`)
 
     } catch (error) {
-      console.error('加入房间错误:', error)
-      socket.emit('error', { error: '加入房间失败' })
+      console.error('鍔犲叆鎴块棿閿欒:', error)
+      socket.emit('error', { error: '鍔犲叆鎴块棿澶辫触' })
     }
   })
 
-  // 离开房间
+  // 绂诲紑鎴块棿
   socket.on('leave_room', async () => {
     await handleLeaveRoom(socket, io)
   })
 
-  // 游戏操作
+  // 娓告垙鎿嶄綔
   socket.on('game_action', async (data) => {
     try {
       if (!socket.userId || !socket.currentRoomId) {
@@ -332,23 +339,23 @@ export const handleSocketConnection = (socket, io) => {
       const result = game.handlePlayerAction(socket.userId, action, amount)
 
       if (result.success) {
-        // 广播游戏状态更新
+        // 骞挎挱娓告垙鐘舵€佹洿鏂?
         io.to(socket.currentRoomId).emit('game_update', {
           gameState: game.getGameState(),
           lastAction: result.action
         })
 
-        // 更新数据库中的游戏状态
+        // 鏇存柊鏁版嵁搴撲腑鐨勬父鎴忕姸鎬?
         await GameRoom.updateGameState(socket.currentRoomId, game.getGameState())
 
-        // 处理AI行动（延迟1秒让用户看到过程）
-        console.log('准备处理AI行动...')
+        // 澶勭悊AI琛屽姩锛堝欢杩?绉掕鐢ㄦ埛鐪嬪埌杩囩▼锛?
+        console.log('鍑嗗澶勭悊AI琛屽姩...')
         setTimeout(async () => {
-          console.log('开始处理AI行动')
+          console.log('寮€濮嬪鐞咥I琛屽姩')
           await processAIActions(game, socket.currentRoomId, io)
         }, 1000)
 
-        // 检查游戏是否结束
+        // 妫€鏌ユ父鎴忔槸鍚︾粨鏉?
         if (game.isGameFinished()) {
           await handleGameFinish(game, socket.currentRoomId, io)
         }
@@ -357,12 +364,12 @@ export const handleSocketConnection = (socket, io) => {
       }
 
     } catch (error) {
-      console.error('游戏操作错误:', error)
-      socket.emit('error', { error: '操作失败' })
+      console.error('娓告垙鎿嶄綔閿欒:', error)
+      socket.emit('error', { error: '鎿嶄綔澶辫触' })
     }
   })
 
-  // 开始游戏
+  // 寮€濮嬫父鎴?
   socket.on('start_game', async () => {
     try {
       if (!socket.userId || !socket.currentRoomId) {
@@ -378,34 +385,34 @@ export const handleSocketConnection = (socket, io) => {
 
       const room = await GameRoom.findById(socket.currentRoomId)
       if (room.creator_id !== socket.userId) {
-        socket.emit('error', { error: '只有房主可以开始游戏' })
+        socket.emit('error', { error: '鍙湁鎴夸富鍙互寮€濮嬫父鎴? })
         return
       }
 
       const result = game.startGame()
       if (result.success) {
-        // 更新房间状态
+        // 鏇存柊鎴块棿鐘舵€?
         await GameRoom.updateStatus(socket.currentRoomId, 'playing')
         
-        // 广播游戏开始
+        // 骞挎挱娓告垙寮€濮?
         io.to(socket.currentRoomId).emit('game_started', {
           gameState: game.getGameState()
         })
 
         await processAIActions(game, socket.currentRoomId, io)
 
-        console.log(`游戏开始: 房间 ${socket.currentRoomId}`)
+        console.log(`娓告垙寮€濮? 鎴块棿 ${socket.currentRoomId}`)
       } else {
         socket.emit('error', { error: result.error })
       }
 
     } catch (error) {
-      console.error('开始游戏错误:', error)
-      socket.emit('error', { error: '开始游戏失败' })
+      console.error('寮€濮嬫父鎴忛敊璇?', error)
+      socket.emit('error', { error: '寮€濮嬫父鎴忓け璐? })
     }
   })
 
-  // 重开游戏
+  // 閲嶅紑娓告垙
   socket.on('reset_game', async () => {
     try {
       if (!socket.userId || !socket.currentRoomId) {
@@ -419,7 +426,7 @@ export const handleSocketConnection = (socket, io) => {
         return
       }
 
-      // 重置游戏状态
+      // 閲嶇疆娓告垙鐘舵€?
       game.gameStarted = false
       game.gameFinished = false
       game.phase = 'waiting'
@@ -429,7 +436,7 @@ export const handleSocketConnection = (socket, io) => {
       game.communityCards = []
       game.actionHistory = []
 
-      // 重置玩家状态
+      // 閲嶇疆鐜╁鐘舵€?
       game.players.forEach(player => {
         player.cards = []
         player.currentBet = 0
@@ -439,21 +446,21 @@ export const handleSocketConnection = (socket, io) => {
         player.active = player.chips > 0
       })
 
-      // 更新房间状态
+      // 鏇存柊鎴块棿鐘舵€?
       await GameRoom.updateStatus(socket.currentRoomId, 'waiting')
       await GameRoom.updateGameState(socket.currentRoomId, game.getGameState())
 
-      // 广播游戏重开
+      // 骞挎挱娓告垙閲嶅紑
       io.to(socket.currentRoomId).emit('game_reset', {
         gameState: game.getGameState(),
-        message: '游戏已重开'
+        message: '娓告垙宸查噸寮€'
       })
 
-      console.log(`游戏重开: 房间 ${socket.currentRoomId}`)
+      console.log(`娓告垙閲嶅紑: 鎴块棿 ${socket.currentRoomId}`)
 
     } catch (error) {
-      console.error('重开游戏错误:', error)
-      socket.emit('error', { error: '重开游戏失败' })
+      console.error('閲嶅紑娓告垙閿欒:', error)
+      socket.emit('error', { error: '閲嶅紑娓告垙澶辫触' })
     }
   })
 
@@ -464,29 +471,29 @@ export const handleSocketConnection = (socket, io) => {
     )
     const updated = await updateSeatCount(socket, io, () => requested)
     if (updated !== null) {
-      console.log(`房间 ${socket.currentRoomId} 调整目标座位数至 ${updated} (请求: ${requested})`)
+      console.log(`鎴块棿 ${socket.currentRoomId} 璋冩暣鐩爣搴т綅鏁拌嚦 ${updated} (璇锋眰: ${requested})`)
     }
   })
 
   socket.on('add_ai', async () => {
     const result = await adjustAIPlayers(socket, io, 1)
     if (result !== null) {
-      console.log(`房间 ${socket.currentRoomId} 添加 AI，当前玩家数 ${result}`)
+      console.log(`鎴块棿 ${socket.currentRoomId} 娣诲姞 AI锛屽綋鍓嶇帺瀹舵暟 ${result}`)
     }
   })
 
   socket.on('remove_ai', async () => {
     const result = await adjustAIPlayers(socket, io, -1)
     if (result !== null) {
-      console.log(`房间 ${socket.currentRoomId} 移除 AI，当前玩家数 ${result}`)
+      console.log(`鎴块棿 ${socket.currentRoomId} 绉婚櫎 AI锛屽綋鍓嶇帺瀹舵暟 ${result}`)
     }
   })
 
-  // 聊天消息
+  // 鑱婂ぉ娑堟伅
   socket.on('send_chat_message', async (data) => {
     try {
       if (!socket.userId || !socket.currentRoomId) {
-        socket.emit('error', { error: '请先加入房间' })
+        socket.emit('error', { error: '璇峰厛鍔犲叆鎴块棿' })
         return
       }
 
@@ -495,10 +502,10 @@ export const handleSocketConnection = (socket, io) => {
         return
       }
 
-      // 消息长度限制
+      // 娑堟伅闀垮害闄愬埗
       const trimmedMessage = message.trim().substring(0, 200)
 
-      // 广播聊天消息到房间内所有玩家
+      // 骞挎挱鑱婂ぉ娑堟伅鍒版埧闂村唴鎵€鏈夌帺瀹?
       io.to(socket.currentRoomId).emit('chat_message', {
         userId: socket.userId,
         username: socket.username,
@@ -506,22 +513,22 @@ export const handleSocketConnection = (socket, io) => {
         timestamp: Date.now()
       })
 
-      console.log(`聊天消息 [${socket.currentRoomId}] ${socket.username}: ${trimmedMessage}`)
+      console.log(`鑱婂ぉ娑堟伅 [${socket.currentRoomId}] ${socket.username}: ${trimmedMessage}`)
 
     } catch (error) {
-      console.error('发送聊天消息错误:', error)
-      socket.emit('error', { error: '发送消息失败' })
+      console.error('鍙戦€佽亰澶╂秷鎭敊璇?', error)
+      socket.emit('error', { error: '鍙戦€佹秷鎭け璐? })
     }
   })
 
-  // 断开连接
+  // 鏂紑杩炴帴
   socket.on('disconnect', async () => {
-    console.log(`Socket断开连接: ${socket.id}`)
+    console.log(`Socket鏂紑杩炴帴: ${socket.id}`)
     await handleLeaveRoom(socket, io)
   })
 }
 
-// 处理玩家离开房间
+// 澶勭悊鐜╁绂诲紑鎴块棿
 const handleLeaveRoom = async (socket, io) => {
   if (!socket.currentRoomId || !socket.userId) {
     return
@@ -546,7 +553,7 @@ const handleLeaveRoom = async (socket, io) => {
       await GameRoom.updateGameState(roomId, null)
       await GameRoom.updateStatus(roomId, 'waiting')
       broadcastPlayerList(io, roomId, null)
-      console.log(`房间 ${roomId} 已清理`)
+      console.log(`鎴块棿 ${roomId} 宸叉竻鐞哷)
     } else {
       if (!game.gameStarted && typeof game.syncAIPlayers === 'function') {
         game.syncAIPlayers()
@@ -567,28 +574,28 @@ const handleLeaveRoom = async (socket, io) => {
 
   socket.leave(roomId)
   socket.currentRoomId = null
-  console.log(`玩家 ${socket.username} 离开房间 ${roomId}`)
+  console.log(`鐜╁ ${socket.username} 绂诲紑鎴块棿 ${roomId}`)
 }
 
 
-// 处理AI连续行动
+// 澶勭悊AI杩炵画琛屽姩
 const processAIActions = async (game, roomId, io) => {
   try {
     const playerCount = typeof game.getPlayers === 'function' ? game.getPlayers().length : (game.players?.length || 0)
-    const maxAIActions = Math.max(60, playerCount * 12) // 防止无限循环，并确保足够的AI行动次数
+    const maxAIActions = Math.max(60, playerCount * 12) // 闃叉鏃犻檺寰幆锛屽苟纭繚瓒冲鐨凙I琛屽姩娆℃暟
     let aiActionCount = 0
 
     while (aiActionCount < maxAIActions) {
       const aiResult = game.processAIAction()
 
       if (!aiResult) {
-        // 没有AI需要行动，或者游戏结束
+        // 娌℃湁AI闇€瑕佽鍔紝鎴栬€呮父鎴忕粨鏉?
         break
       }
 
       aiActionCount++
 
-      // 广播AI行动
+      // 骞挎挱AI琛屽姩
       if (aiResult.actionSummary) {
         io.to(roomId).emit('ai_action', aiResult.actionSummary)
       } else {
@@ -600,7 +607,7 @@ const processAIActions = async (game, roomId, io) => {
         })
       }
 
-      // 广播游戏状态更新
+      // 骞挎挱娓告垙鐘舵€佹洿鏂?
       io.to(roomId).emit('game_update', {
         gameState: aiResult.gameState,
         lastAction: aiResult.actionSummary || {
@@ -614,13 +621,13 @@ const processAIActions = async (game, roomId, io) => {
         }
       })
 
-      // 更新数据库中的游戏状态
+      // 鏇存柊鏁版嵁搴撲腑鐨勬父鎴忕姸鎬?
       await GameRoom.updateGameState(roomId, aiResult.gameState)
 
-      // AI行动间隔 - 5秒延迟让玩家能够看清AI的操作
+      // AI琛屽姩闂撮殧 - 5绉掑欢杩熻鐜╁鑳藉鐪嬫竻AI鐨勬搷浣?
       await new Promise(resolve => setTimeout(resolve, 5000))
       
-      // 检查游戏是否结束
+      // 妫€鏌ユ父鎴忔槸鍚︾粨鏉?
       if (game.isGameFinished()) {
         await handleGameFinish(game, roomId, io)
         break
@@ -632,17 +639,17 @@ const processAIActions = async (game, roomId, io) => {
     }
 
   } catch (error) {
-    console.error('AI行动处理错误:', error)
+    console.error('AI琛屽姩澶勭悊閿欒:', error)
   }
 }
 
-// 处理游戏结束
+// 澶勭悊娓告垙缁撴潫
 const handleGameFinish = async (game, roomId, io) => {
   try {
     const results = game.getGameResults()
 
     if (!results) {
-      console.warn(`房间 ${roomId} 的游戏结果为空，无法结算`)
+      console.warn(`鎴块棿 ${roomId} 鐨勬父鎴忕粨鏋滀负绌猴紝鏃犳硶缁撶畻`)
       return
     }
 
@@ -714,7 +721,7 @@ const handleGameFinish = async (game, roomId, io) => {
       })
     }
 
-    console.log(`游戏结束: 房间 ${roomId}, 获胜者 ${results.winner.name}`)
+    console.log(`娓告垙缁撴潫: 鎴块棿 ${roomId}, 鑾疯儨鑰?${results.winner.name}`)
 
     setTimeout(async () => {
       try {
@@ -763,11 +770,14 @@ const handleGameFinish = async (game, roomId, io) => {
           })
         }
       } catch (error) {
-        console.error('准备下一局时出错:', error)
+        console.error('鍑嗗涓嬩竴灞€鏃跺嚭閿?', error)
       }
     }, 2500)
 
   } catch (error) {
-    console.error('处理游戏结束错误:', error)
+    console.error('澶勭悊娓告垙缁撴潫閿欒:', error)
   }
 }
+
+
+

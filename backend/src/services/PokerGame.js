@@ -1,6 +1,6 @@
-// Poker game utilities and engine implementing full Texas Hold'em flow
+﻿// Poker game utilities and engine implementing full Texas Hold'em flow
 
-const SUITS = ['?', '?', '?', '?']
+const SUITS = ['♠', '♥', '♦', '♣']
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
 
 const HAND_RANK_LABELS = {
@@ -16,6 +16,9 @@ const HAND_RANK_LABELS = {
 }
 
 const AI_NAMES = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry', 'Ivy', 'Jack']
+
+const DEFAULT_MAX_PLAYERS = 10
+const MIN_SEAT_COUNT = 4
 
 function generateCombinations(items, k) {
   const indices = []
@@ -268,10 +271,10 @@ export class PokerGame {
     this.roomId = roomId
     this.smallBlind = options.smallBlind || 10
     this.bigBlind = options.bigBlind || 20
-    this.maxPlayers = options.maxPlayers || 6
+    this.maxPlayers = options.maxPlayers || DEFAULT_MAX_PLAYERS
     this.desiredSeatCount = Math.min(
       this.maxPlayers,
-      Math.max(3, options.desiredSeatCount || this.maxPlayers)
+      Math.max(MIN_SEAT_COUNT, options.desiredSeatCount || this.maxPlayers)
     )
 
     this.players = []
@@ -340,8 +343,15 @@ export class PokerGame {
   }
 
   removeAIPlayer() {
+    if (this.players.length <= MIN_SEAT_COUNT) {
+      return false
+    }
+
     for (let i = this.players.length - 1; i >= 0; i--) {
       if (this.players[i].isAI) {
+        if (this.players.length - 1 < Math.max(MIN_SEAT_COUNT, this.countRealPlayers())) {
+          return false
+        }
         this.players.splice(i, 1)
         return true
       }
@@ -355,7 +365,9 @@ export class PokerGame {
 
   setDesiredSeatCount(count) {
     const realPlayers = this.countRealPlayers()
-    const sanitized = Math.max(realPlayers, Math.min(this.maxPlayers, Math.max(1, count)))
+    const requested = Number.isFinite(count) ? count : this.desiredSeatCount || this.players.length
+    const target = Math.max(MIN_SEAT_COUNT, requested)
+    const sanitized = Math.max(realPlayers, Math.min(this.maxPlayers, Math.round(target)))
     this.desiredSeatCount = sanitized
 
     if (!this.gameStarted) {
@@ -373,9 +385,9 @@ export class PokerGame {
       return
     }
 
-    const minimum = this.countRealPlayers()
+    const minimum = Math.max(MIN_SEAT_COUNT, this.countRealPlayers())
     const desired = this.desiredSeatCount || this.players.length
-    const target = Math.max(Math.min(this.maxPlayers, Math.max(1, desired)), minimum)
+    const target = Math.max(minimum, Math.min(this.maxPlayers, Math.max(MIN_SEAT_COUNT, desired)))
 
     while (this.players.length < target) {
       if (!this.addAIPlayer()) {
@@ -1383,3 +1395,4 @@ export class PokerGame {
     return this.players.length
   }
 }
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit Tests for Poker Game Engine
  */
 
@@ -13,15 +13,15 @@ describe('Card Class', () => {
   })
 
   test('should calculate correct value for face cards', () => {
-    expect(new Card('♥', 'K').value).toBe(13)
-    expect(new Card('♦', 'Q').value).toBe(12)
-    expect(new Card('♣', 'J').value).toBe(11)
+    expect(new Card('♠', 'K').value).toBe(13)
+    expect(new Card('♠', 'Q').value).toBe(12)
+    expect(new Card('♠', 'J').value).toBe(11)
   })
 
   test('should calculate correct value for number cards', () => {
     expect(new Card('♠', '10').value).toBe(10)
-    expect(new Card('♥', '5').value).toBe(5)
-    expect(new Card('♦', '2').value).toBe(2)
+    expect(new Card('♠', '5').value).toBe(5)
+    expect(new Card('♠', '2').value).toBe(2)
   })
 
   test('should have correct toString representation', () => {
@@ -270,8 +270,8 @@ describe('PokerGame Class', () => {
       const cards = [
         new Card('♠', 'A'),
         new Card('♥', 'A'),
-        new Card('♦', '7'),
-        new Card('♣', '5'),
+        new Card('♣', '7'),
+        new Card('♦', '5'),
         new Card('♠', '3')
       ]
 
@@ -283,8 +283,8 @@ describe('PokerGame Class', () => {
       const cards = [
         new Card('♠', 'A'),
         new Card('♥', 'A'),
-        new Card('♦', 'K'),
         new Card('♣', 'K'),
+        new Card('♦', 'K'),
         new Card('♠', '3')
       ]
 
@@ -296,8 +296,8 @@ describe('PokerGame Class', () => {
       const cards = [
         new Card('♠', 'A'),
         new Card('♥', 'A'),
-        new Card('♦', 'A'),
-        new Card('♣', 'K'),
+        new Card('♣', 'A'),
+        new Card('♦', 'K'),
         new Card('♠', '3')
       ]
 
@@ -321,9 +321,9 @@ describe('PokerGame Class', () => {
     test('should correctly identify a full house', () => {
       const cards = [
         new Card('♠', 'A'),
-        new Card('♥', 'A'),
-        new Card('♦', 'A'),
-        new Card('♣', 'K'),
+        new Card('♠', 'A'),
+        new Card('♠', 'A'),
+        new Card('♠', 'K'),
         new Card('♠', 'K')
       ]
 
@@ -334,9 +334,9 @@ describe('PokerGame Class', () => {
     test('should correctly identify four of a kind', () => {
       const cards = [
         new Card('♠', 'A'),
-        new Card('♥', 'A'),
-        new Card('♦', 'A'),
-        new Card('♣', 'A'),
+        new Card('♠', 'A'),
+        new Card('♠', 'A'),
+        new Card('♠', 'A'),
         new Card('♠', 'K')
       ]
 
@@ -403,7 +403,7 @@ describe('PokerGame Class', () => {
       const aiPlayer = game.players[0]
       aiPlayer.cards = [
         new Card('♠', 'A'),
-        new Card('♥', 'A')
+        new Card('♠', 'A')
       ]
       game.communityCards = []
 
@@ -413,3 +413,4 @@ describe('PokerGame Class', () => {
     })
   })
 })
+

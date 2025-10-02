@@ -12,7 +12,8 @@
       "Bash(taskkill:*)",
       "Bash(test:*)",
       "Bash(npm run lint)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []

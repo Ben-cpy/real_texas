@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="game-screen" :class="[`phase-${gameStore.gamePhase}`]">
     <header class="top-bar">
       <div class="room-info">
@@ -17,10 +17,10 @@
 
       <div class="control-cluster">
         <button class="btn icon-btn" @click="toggleSound" :aria-pressed="soundEnabled" title="Toggle Sound">
-          <span>{{ soundEnabled ? '🔊' : '🔇' }}</span>
+          <span>{{ soundEnabled ? '馃攰' : '馃攪' }}</span>
         </button>
         <button class="btn icon-btn" @click="showHelp" title="Game Rules & Help">
-          <span>❓</span>
+          <span>鉂?/span>
         </button>
         <button class="btn" @click="resetGame" v-if="gameStore.gamePhase !== 'waiting'">Restart</button>
         <button class="btn danger" @click="leaveGame">Leave</button>
@@ -52,16 +52,16 @@
     <transition name="modal">
       <div v-if="showHelpDialog" class="modal-overlay" @click="closeHelp">
         <div class="modal-content" @click.stop>
-          <button class="modal-close" @click="closeHelp">✕</button>
+          <button class="modal-close" @click="closeHelp">鉁?/button>
           <h2>Texas Hold'em Rules</h2>
           <div class="help-content">
             <section>
-              <h3>🎯 Objective</h3>
+              <h3>馃幆 Objective</h3>
               <p>Create the best 5-card poker hand using your 2 hole cards and 5 community cards.</p>
             </section>
 
             <section>
-              <h3>🃏 Game Phases</h3>
+              <h3>馃儚 Game Phases</h3>
               <ul>
                 <li><strong>Pre-Flop:</strong> Each player gets 2 hole cards. First betting round.</li>
                 <li><strong>Flop:</strong> 3 community cards revealed. Second betting round.</li>
@@ -72,7 +72,7 @@
             </section>
 
             <section>
-              <h3>🎴 Hand Rankings (Best to Worst)</h3>
+              <h3>馃幋 Hand Rankings (Best to Worst)</h3>
               <ol>
                 <li>Royal Flush</li>
                 <li>Straight Flush</li>
@@ -88,7 +88,7 @@
             </section>
 
             <section>
-              <h3>🎲 Actions</h3>
+              <h3>馃幉 Actions</h3>
               <ul>
                 <li><strong>Fold:</strong> Give up and forfeit the current hand</li>
                 <li><strong>Check:</strong> Pass action without betting (only if no bet to call)</li>
@@ -107,7 +107,11 @@
         <div class="table-felt">
           <div class="table-glow"></div>
 
-          <div class="pot-info">
+          <div class="pot-info" aria-live="polite">
+            <div class="round-chip">
+              <span class="round-phase">{{ phaseLabel }}</span>
+              <span v-if="phaseDescription" class="round-detail">{{ phaseDescription }}</span>
+            </div>
             <span class="label">Pot</span>
             <span class="value">${{ gameStore.totalPot }}</span>
             <span class="call" v-if="callAmount > 0">To call ${{ callAmount }}</span>
@@ -131,55 +135,55 @@
           </div>
 
           <div
-            v-if="dealerIndex !== -1 && tablePlayers.length"
+            v-if="dealerSeatClass"
             class="dealer-chip"
-            :class="seatClasses[dealerIndex % seatClasses.length]"
+            :class="dealerSeatClass"
           >
             D
           </div>
 
           <div class="player-layer">
             <div
-              v-for="(player, index) in tablePlayers"
-              :key="player.id"
+              v-for="seat in opponentSeats"
+              :key="seat.player.id"
               class="seat"
               :class="[
-                seatClasses[index % seatClasses.length],
+                seat.seatClass,
                 {
-                  me: player.id === userStore.user?.id,
-                  active: player.id === currentTurnPlayerId,
-                  folded: player.folded,
-                  allin: player.allIn
+                  active: seat.player.id === currentTurnPlayerId,
+                  folded: seat.player.folded,
+                  allin: seat.player.allIn
                 }
               ]"
             >
               <div class="seat-frame">
                 <div class="seat-header">
-                  <span class="name">{{ player.name }}</span>
-                  <span class="chips">${{ player.chips }}</span>
+                  <span class="name">{{ seat.player.name }}</span>
+                  <span class="chips">${{ seat.player.chips }}</span>
                 </div>
                 <div class="seat-body">
-                  <div class="last-action" v-if="player.lastAction && !player.folded">
-                    {{ formatPlayerAction(player.lastAction) }}
+                  <div class="last-action" v-if="seat.player.lastAction && !seat.player.folded">
+                    {{ formatPlayerAction(seat.player.lastAction) }}
                   </div>
-                  <div class="bet-stack" v-if="player.currentBet > 0 && !player.folded">
-                    Bet ${{ player.currentBet }}
+                  <div class="bet-stack" v-if="seat.player.currentBet > 0 && !seat.player.folded">
+                    Bet ${{ seat.player.currentBet }}
                   </div>
                 </div>
                 <div class="hole-cards">
                   <div
                     v-for="n in 2"
-                    :key="`hole-${player.id}-${n}`"
+                    :key="`hole-${seat.player.id}-${n}`"
                     class="card-slot"
-                    :class="{ revealed: shouldRevealPlayerCard(player, n - 1) }"
+                    :class="{ revealed: shouldRevealPlayerCard(seat.player, n - 1) }"
                   >
                     <span
-                      v-if="shouldRevealPlayerCard(player, n - 1)"
+                      v-if="shouldRevealPlayerCard(seat.player, n - 1)"
                       class="card-face"
-                      :class="getCardColor(player.cards[n - 1]?.suit)"
+                      :class="getCardColor(seat.player.cards[n - 1]?.suit)"
                     >
-                      {{ player.cards[n - 1]?.suit }}{{ player.cards[n - 1]?.rank }}
+                      {{ seat.player.cards[n - 1]?.suit }}{{ seat.player.cards[n - 1]?.rank }}
                     </span>
+                    <div v-else class="card-back"></div>
                   </div>
                 </div>
               </div>
@@ -192,26 +196,81 @@
         </div>
 
         <div class="table-footer">
-          <div class="host-controls" v-if="gameStore.isRoomCreator">
-            <div class="host-label">You are the Host</div>
-            <div class="controls-row">
-              <div class="seat-info">
-                {{ seatLabel }}
+          <div v-if="gameStore.gamePhase === 'waiting'" class="footer-waiting">
+            <div class="host-controls" v-if="gameStore.isRoomCreator">
+              <div class="host-label">You are the Host</div>
+              <div class="controls-row">
+                <div class="seat-info">
+                  {{ seatLabel }}
+                  <small>Min {{ MIN_SEAT_COUNT }} / Max {{ maxSeatLimit }}</small>
+                </div>
+                <button class="btn success" @click="addAI" :disabled="!canAddAI">
+                  Add AI
+                </button>
+                <button class="btn warning" @click="removeAI" :disabled="!canRemoveAI">
+                  Remove AI
+                </button>
+                <button class="btn primary large" @click="startGame" :disabled="!gameStore.canStartGame">
+                  {{ gameStore.gamePhase === 'waiting' ? 'Start Game' : 'Deal Next Hand' }}
+                </button>
               </div>
-              <button class="btn success" @click="addAI" :disabled="!canAddAI">
-                Add AI
-              </button>
-              <button class="btn warning" @click="removeAI" :disabled="!canRemoveAI">
-                Remove AI
-              </button>
-              <button class="btn primary large" @click="startGame" :disabled="!gameStore.canStartGame">
-                {{ gameStore.gamePhase === 'waiting' ? 'Start Game' : 'Deal Next Hand' }}
-              </button>
+            </div>
+
+            <div class="waiting-banner" v-else>
+              Waiting for the host to start the game...
             </div>
           </div>
 
-          <div class="waiting-banner" v-else-if="gameStore.gamePhase === 'waiting'">
-            Waiting for the host to start the game...
+          <div v-else-if="myPlayer" class="player-panel">
+            <div class="panel-header">
+              <div class="identity">
+                <span class="label">You</span>
+                <h3>{{ myPlayer.name }}</h3>
+              </div>
+              <div class="chip-summary">
+                <span class="stack">Stack ${{ myPlayer.chips }}</span>
+                <span v-if="myPlayer.currentBet > 0" class="bet">In pot ${{ myPlayer.currentBet }}</span>
+                <span
+                  v-if="gameStore.isMyTurn && callAmount > 0"
+                  class="call-highlight"
+                >
+                  To call ${{ callAmount }}
+                </span>
+                <span v-else-if="gameStore.isMyTurn" class="call-highlight ready">
+                  Your turn
+                </span>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div class="panel-cards">
+                <div
+                  v-for="n in 2"
+                  :key="`panel-card-${n}`"
+                  class="player-card"
+                  :class="{ revealed: shouldRevealPlayerCard(myPlayer, n - 1) }"
+                >
+                  <div
+                    v-if="shouldRevealPlayerCard(myPlayer, n - 1)"
+                    class="card-face large"
+                    :class="getCardColor(myPlayer.cards[n - 1]?.suit)"
+                  >
+                    {{ myPlayer.cards[n - 1]?.suit }}{{ myPlayer.cards[n - 1]?.rank }}
+                  </div>
+                  <div v-else class="card-back large"></div>
+                </div>
+              </div>
+              <div class="panel-status">
+                <div class="status-line" v-if="myPlayer.lastAction">
+                  {{ formatPlayerAction(myPlayer.lastAction) }}
+                </div>
+                <div class="status-line" v-else>
+                  Waiting for action
+                </div>
+                <div class="status-line" v-if="myPlayer.bestHand && myPlayer.bestHand.rankName">
+                  Best hand: {{ myPlayer.bestHand.rankName }}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -321,7 +380,8 @@ const roomIdParam = ref(route.query.roomId || 'default-room')
 
 const displayRoomId = computed(() => gameStore.roomId || roomIdParam.value || 'N/A')
 
-const FALLBACK_MAX_SEATS = 6
+const FALLBACK_MAX_SEATS = 10
+const MIN_SEAT_COUNT = 4
 
 const showRaisePanel = ref(false)
 const raiseAmount = ref(0)
@@ -333,6 +393,7 @@ const soundEnabled = ref(soundService.enabled)
 const showPhaseBanner = ref(false)
 const phaseBannerText = ref('')
 const phaseBannerSubtext = ref('')
+let phaseBannerTimer = null
 const showHelpDialog = ref(false)
 
 const hasJoinedRoom = ref(false)
@@ -350,12 +411,54 @@ const cleanupSocketListeners = () => {
   socketListeners.length = 0
 }
 
-const seatClasses = ['seat-0', 'seat-1', 'seat-2', 'seat-3', 'seat-4', 'seat-5']
+const opponentSeatClasses = [
+  'seat-0',
+  'seat-1',
+  'seat-2',
+  'seat-3',
+  'seat-4',
+  'seat-5',
+  'seat-6',
+  'seat-7',
+  'seat-8'
+]
 
+const userId = computed(() => userStore.user?.id ?? null)
+const myPlayer = computed(() => gameStore.myPlayer ?? null)
 const maxSeatLimit = computed(() => gameStore.maxPlayers || FALLBACK_MAX_SEATS)
 const seatLabel = computed(() => `${gameStore.players.length} / ${maxSeatLimit.value} seats`)
 const tablePlayers = computed(() => gameStore.players || [])
 const dealerIndex = computed(() => (typeof gameStore.dealerIndex === 'number' ? gameStore.dealerIndex : -1))
+const opponentSeats = computed(() => {
+  const players = tablePlayers.value || []
+  const seats = []
+  let seatCursor = 0
+
+  for (const player of players) {
+    if (player.id === userId.value) continue
+    const seatClass = opponentSeatClasses[seatCursor % opponentSeatClasses.length]
+    seats.push({ player, seatClass })
+    seatCursor += 1
+  }
+
+  return seats
+})
+
+const dealerSeatClass = computed(() => {
+  if (dealerIndex.value === -1) return null
+  const players = tablePlayers.value || []
+  if (!players.length) return null
+  const dealer = players[dealerIndex.value]
+  if (!dealer) return null
+
+  if (dealer.id === userId.value) {
+    return 'my-seat'
+  }
+
+  const seat = opponentSeats.value.find((entry) => entry.player.id === dealer.id)
+  return seat ? seat.seatClass : null
+})
+
 const dealerName = computed(() => {
   if (!tablePlayers.value.length) {
     return gameStore.gamePhase === 'waiting' ? 'Waiting' : 'N/A'
@@ -393,7 +496,7 @@ const callAmount = computed(() => {
 const canCheck = computed(() => callAmount.value === 0)
 const canRaise = computed(() => gameStore.isMyTurn && (gameStore.myPlayer?.chips || 0) > 0)
 const canAddAI = computed(() => gameStore.gamePhase === 'waiting' && gameStore.players.length < maxSeatLimit.value)
-const canRemoveAI = computed(() => gameStore.gamePhase === 'waiting' && gameStore.aiPlayerCount > 0)
+const canRemoveAI = computed(() =>\n  gameStore.gamePhase === 'waiting' &&\n  gameStore.aiPlayerCount > 0 &&\n  gameStore.players.length > MIN_SEAT_COUNT\n)
 
 const maxRaiseValue = computed(() => Math.max(0, gameStore.myPlayer?.chips || 0))
 
@@ -431,6 +534,7 @@ const phaseDescriptions = {
 }
 
 const phaseLabel = computed(() => phaseNames[gameStore.gamePhase] || (gameStore.gamePhase || '').toUpperCase())
+const phaseDescription = computed(() => phaseDescriptions[gameStore.gamePhase] || '')
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
 
@@ -469,7 +573,7 @@ watch(
   }
 )
 
-const getCardColor = (suit) => (suit === '♥' || suit === '♦' ? 'red' : 'black')
+const getCardColor = (suit) => (suit === '鈾? || suit === '鈾? ? 'red' : 'black')
 
 const formatPlayerAction = (action) => {
   const key = typeof action === 'string' ? action : action?.action || action?.type
@@ -651,6 +755,14 @@ const scrollChatToBottom = () => {
 }
 
 watch(
+  () => gameStore.gamePhase,
+  (phase, previous) => {
+    if (!phase || phase === previous) return
+    showPhaseTransition(phase)
+  }
+)
+
+watch(
   () => chatMessages.value.length,
   () => {
     scrollChatToBottom()
@@ -740,21 +852,25 @@ watch(
 )
 
 const showPhaseTransition = (phase) => {
+  if (!phase) return
+
   phaseBannerText.value = phaseNames[phase] || (phase || '').toUpperCase()
   phaseBannerSubtext.value = phaseDescriptions[phase] || ''
   showPhaseBanner.value = true
-  setTimeout(() => {
+
+  if (phaseBannerTimer) {
+    clearTimeout(phaseBannerTimer)
+  }
+
+  phaseBannerTimer = setTimeout(() => {
     showPhaseBanner.value = false
-  }, 2000)
+    phaseBannerTimer = null
+  }, 1800)
 }
 
 const setupSocketListeners = () => {
   const handlers = {
     game_update: (data) => {
-      if (data.gameState && data.gameState.phase && data.gameState.phase !== gameStore.gamePhase) {
-        showPhaseTransition(data.gameState.phase)
-      }
-
       if (data.lastAction) {
         const action = data.lastAction
         addLog(`${action.playerName || action.player || 'Player'} ${formatPlayerAction(action)}`)
@@ -774,9 +890,6 @@ const setupSocketListeners = () => {
       soundService.playGameStart()
       soundService.playCardDeal()
       addLog('New hand started')
-      if (data?.gameState?.phase) {
-        showPhaseTransition(data.gameState.phase)
-      }
     },
     game_finished: (data) => {
       const winners =
@@ -795,7 +908,7 @@ const setupSocketListeners = () => {
           soundService.playLose()
         }
       } else {
-        addLog('Hand finished. Preparing next hand…')
+        addLog('Hand finished. Preparing next hand鈥?)
       }
     },
     player_joined: (data) => {
@@ -842,7 +955,7 @@ const setupSocketListeners = () => {
         data.achievements.forEach((achievement, index) => {
           setTimeout(() => {
             ElMessage.success({
-              message: `🎉 Achievement unlocked ${achievement.icon} ${achievement.name}\n${achievement.description}\nReward: ${achievement.reward} chips`,
+              message: `馃帀 Achievement unlocked ${achievement.icon} ${achievement.name}\n${achievement.description}\nReward: ${achievement.reward} chips`,
               duration: 5000,
               showClose: true
             })
@@ -882,6 +995,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (phaseBannerTimer) {
+    clearTimeout(phaseBannerTimer)
+    phaseBannerTimer = null
+  }
   cleanupSocketListeners()
   gameStore.cleanup()
   gameStore.leaveRoom()
@@ -1183,12 +1300,42 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.15rem;
-  padding: 0.5rem 1rem;
-  background: rgba(15, 23, 42, 0.7);
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  gap: 0.4rem;
+  padding: 0.75rem 1.2rem;
+  min-width: 210px;
+  background: rgba(15, 23, 42, 0.78);
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45);
   color: #e2e8f0;
+}
+
+.round-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.round-phase {
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+}
+
+.round-detail {
+  font-size: 0.68rem;
+  text-transform: none;
+  letter-spacing: 0;
+  color: rgba(226, 232, 240, 0.7);
 }
 
 .pot-info .label {
@@ -1271,7 +1418,7 @@ onBeforeUnmount(() => {
 
 .seat {
   position: absolute;
-  width: 180px;
+  width: 170px;
   pointer-events: none;
   transition: transform 0.2s ease, opacity 0.2s ease;
 }
@@ -1345,12 +1492,38 @@ onBeforeUnmount(() => {
   border-color: rgba(250, 204, 21, 0.6);
 }
 
-.seat-0 { top: 8%; left: 15%; }
-.seat-1 { top: 5%; left: 50%; transform: translateX(-50%); }
-.seat-2 { top: 8%; right: 15%; }
-.seat-3 { bottom: 14%; right: 10%; }
-.seat-4 { bottom: 6%; left: 50%; transform: translateX(-50%); }
-.seat-5 { bottom: 14%; left: 10%; }
+.seat-0 { top: 4%; left: 50%; transform: translateX(-50%); }
+.seat-1 { top: 10%; left: 24%; }
+.seat-2 { top: 10%; right: 24%; }
+.seat-3 { top: 24%; left: 8%; }
+.seat-4 { top: 24%; right: 8%; }
+.seat-5 { top: 46%; left: 4%; }
+.seat-6 { top: 46%; right: 4%; }
+.seat-7 { bottom: 18%; right: 12%; }
+.seat-8 { bottom: 18%; left: 12%; }
+
+.my-seat {
+  bottom: 6%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.seat.my-seat {
+  width: 230px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.seat.my-seat .seat-frame {
+  padding: 0.85rem 1.1rem;
+  gap: 0.55rem;
+}
+
+.dealer-chip.my-seat {
+  bottom: 26%;
+  left: 50%;
+  transform: translateX(-50%);
+}
 
 .empty-state {
   position: absolute;
@@ -1361,7 +1534,7 @@ onBeforeUnmount(() => {
   color: rgba(226, 232, 240, 0.75);
   background: rgba(15, 23, 42, 0.6);
   padding: 0.75rem 1.2rem;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
@@ -1369,8 +1542,151 @@ onBeforeUnmount(() => {
   width: 100%;
   display: flex;
   justify-content: center;
+  align-items: stretch;
+  margin-top: 1.75rem;
+}
+
+.footer-waiting {
+  display: flex;
+  justify-content: center;
   align-items: center;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+.player-panel {
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
+  padding: 1.2rem 1.6rem;
+  background: rgba(15, 23, 42, 0.78);
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-shadow: 0 24px 45px rgba(15, 23, 42, 0.48);
+  min-width: 360px;
+  max-width: 520px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.2rem;
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.identity .label {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.identity h3 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #f8fafc;
+}
+
+.chip-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-end;
+  font-size: 0.85rem;
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.chip-summary .stack {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.chip-summary .bet {
+  color: rgba(244, 114, 182, 0.85);
+}
+
+.call-highlight {
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.call-highlight.ready {
+  background: rgba(74, 222, 128, 0.18);
+  color: #4ade80;
+}
+
+.panel-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.panel-cards {
+  display: flex;
+  gap: 0.9rem;
+}
+
+.player-card {
+  width: 76px;
+  height: 108px;
+  border-radius: 14px;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  box-shadow: 0 18px 32px rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.player-card.revealed {
+  background: rgba(15, 23, 42, 0.15);
+  border-color: rgba(148, 163, 184, 0.55);
+}
+
+.card-face.large {
+  font-size: 2.1rem;
+}
+
+.card-back {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  border: 2px solid rgba(148, 163, 184, 0.45);
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.25), rgba(56, 189, 248, 0.55));
+  box-shadow: inset 0 0 18px rgba(15, 23, 42, 0.4);
+}
+
+.card-back.large {
+  border-radius: 14px;
+}
+
+.panel-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 160px;
+  font-size: 0.85rem;
+  color: rgba(226, 232, 240, 0.85);
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .host-controls {
@@ -1401,7 +1717,8 @@ onBeforeUnmount(() => {
 }
 
 .seat-info {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 0.45rem 1rem;
@@ -1412,6 +1729,15 @@ onBeforeUnmount(() => {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   min-width: 110px;
+  gap: 0.2rem;
+}
+
+.seat-info small {
+  font-size: 0.7rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: rgba(148, 163, 184, 0.8);
+  font-weight: 400;
 }
 
 .waiting-banner {
@@ -1420,7 +1746,7 @@ onBeforeUnmount(() => {
   background: rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.2);
   padding: 0.5rem 1rem;
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 .sidebar {
@@ -1439,6 +1765,105 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0.75rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45);
+}
+
+.log-panel {
+  min-height: 0;
+}
+
+.log-scroll {
+  flex: 1;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.log-entry {
+  font-size: 0.85rem;
+  color: rgba(226, 232, 240, 0.85);
+  line-height: 1.35;
+}
+
+.log-entry::before {
+  content: '•';
+  margin-right: 0.35rem;
+  color: rgba(148, 163, 184, 0.7);
+}
+
+.chat-panel {
+  min-height: 0;
+}
+
+.chat-scroll {
+  flex: 1;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.chat-line {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  color: rgba(226, 232, 240, 0.85);
+}
+
+.chat-line.mine {
+  align-items: flex-end;
+  color: #c7d2fe;
+}
+
+.chat-line .user {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.chat-line.mine .user {
+  color: #a5b4fc;
+}
+
+.chat-line .message {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.75rem;
+  border-radius: 12px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.chat-line.mine .message {
+  background: rgba(129, 140, 248, 0.25);
+  border-color: rgba(129, 140, 248, 0.4);
+}
+
+.chat-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.chat-input-row input {
+  flex: 1;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.7);
+  padding: 0.55rem 0.75rem;
+  color: #f8fafc;
+  font-size: 0.85rem;
+}
+
+.chat-input-row input::placeholder {
+  color: rgba(148, 163, 184, 0.6);
 }
 
 .sidebar h3 {
@@ -1545,37 +1970,41 @@ onBeforeUnmount(() => {
 
 .chat-line {
   display: flex;
-  gap: 0.4rem;
-  font-size: 0.8rem;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
   color: rgba(226, 232, 240, 0.85);
 }
 
 .chat-line.mine {
-  color: #38bdf8;
+  align-items: flex-end;
+  color: #c7d2fe;
 }
 
 .chat-line .user {
+  font-size: 0.75rem;
   font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.85);
 }
 
-.chat-input-row {
-  display: flex;
-  gap: 0.6rem;
+.chat-line.mine .user {
+  color: #a5b4fc;
+}
+
+.chat-line .message {
+  display: inline-flex;
   align-items: center;
-}
-
-.chat-input-row input {
-  flex: 1;
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 0.45rem 0.75rem;
   border-radius: 12px;
-  padding: 0.55rem 0.75rem;
-  color: #f8fafc;
-  font-size: 0.85rem;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
-.chat-input-row input::placeholder {
-  color: rgba(148, 163, 184, 0.6);
+.chat-line.mine .message {
+  background: rgba(129, 140, 248, 0.25);
+  border-color: rgba(129, 140, 248, 0.4);
 }
 
 .raise-panel-enter-active {
@@ -1765,3 +2194,8 @@ onBeforeUnmount(() => {
   opacity: 0;
 }
 </style>
+
+
+
+
+
