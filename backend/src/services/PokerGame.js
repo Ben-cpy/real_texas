@@ -1,4 +1,4 @@
-// 扑克牌工具类
+// Poker card utility class
 export class Card {
   constructor(suit, rank) {
     this.suit = suit // ♠ ♥ ♦ ♣
@@ -19,7 +19,7 @@ export class Card {
   }
 }
 
-// 牌堆类
+// Deck class
 export class Deck {
   constructor() {
     this.cards = []
@@ -56,7 +56,7 @@ export class Deck {
   }
 }
 
-// 德州扑克游戏逻辑
+// Texas Hold'em poker game logic
 export class PokerGame {
   constructor(roomId, options = {}) {
     this.roomId = roomId
@@ -79,7 +79,7 @@ export class PokerGame {
     this.actionHistory = []
   }
 
-  // 添加玩家
+  // Add player
   addPlayer(player) {
     if (this.players.length >= this.maxPlayers) {
       return false
@@ -106,13 +106,15 @@ export class PokerGame {
     return true
   }
 
-  // 添加AI玩家
+  // Add AI player
   addAIPlayer() {
+    const aiNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry']
     const aiId = `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const aiIndex = this.players.filter(player => player.isAI).length + 1
+    const aiIndex = this.players.filter(player => player.isAI).length
+    const aiName = aiNames[aiIndex % aiNames.length]
     const aiPlayer = {
       id: aiId,
-      name: `AI玩家${aiIndex}`,
+      name: aiName,
       chips: 1000,
       socketId: null,
       isAI: true
@@ -120,7 +122,7 @@ export class PokerGame {
     return this.addPlayer(aiPlayer)
   }
 
-  // 移除AI玩家
+  // Remove AI player
   removeAIPlayer() {
     for (let i = this.players.length - 1; i >= 0; i--) {
       if (this.players[i].isAI) {
@@ -131,12 +133,12 @@ export class PokerGame {
     return false
   }
 
-  // 统计真实玩家数量
+  // Count real players
   countRealPlayers() {
     return this.players.filter(player => !player.isAI).length
   }
 
-  // 设置目标玩家数
+  // Set desired seat count
   setDesiredSeatCount(count) {
     const realPlayers = this.countRealPlayers()
     const sanitizedCount = Math.max(realPlayers, Math.max(3, Math.min(this.maxPlayers, count)))
@@ -150,7 +152,7 @@ export class PokerGame {
     }
   }
 
-  // 根据目标玩家数同步AI
+  // Sync AI players based on desired seat count
   syncAIPlayers() {
     if (this.gameStarted) {
       return
@@ -174,12 +176,12 @@ export class PokerGame {
     }
   }
 
-  // 获取玩家数量
+  // Get player count
   getPlayerCount() {
     return this.players.length
   }
 
-  // 获取活跃玩家列表
+  // Get active players list
   getPlayers() {
     return this.players.map(player => ({
       id: player.id,
@@ -194,14 +196,14 @@ export class PokerGame {
     }))
   }
 
-  // 移除玩家
+  // Remove player
   removePlayer(playerId) {
     const playerIndex = this.players.findIndex(p => p.id === playerId)
     if (playerIndex === -1) return false
 
     this.players.splice(playerIndex, 1)
     
-    // 如果游戏进行中，需要调整当前玩家索引
+    // If game is in progress, need to adjust current player index
     if (this.gameStarted && playerIndex <= this.currentPlayerIndex) {
       this.currentPlayerIndex = Math.max(0, this.currentPlayerIndex - 1)
     }
@@ -209,14 +211,14 @@ export class PokerGame {
     return true
   }
 
-  // 开始游戏
+  // Start game
   startGame() {
     if (this.players.length < 2) {
-      return { success: false, error: '至少需要2名玩家才能开始游戏' }
+      return { success: false, error: 'At least 2 players are required to start the game' }
     }
 
     if (this.gameStarted) {
-      return { success: false, error: '游戏已经开始' }
+      return { success: false, error: 'Game has already started' }
     }
 
     this.gameStarted = true
@@ -225,7 +227,7 @@ export class PokerGame {
     return { success: true }
   }
 
-  // 开始新一手牌
+  // Start new hand
   newHand() {
     this.deck.reset()
     this.communityCards = []
@@ -235,7 +237,7 @@ export class PokerGame {
     this.gameFinished = false
     this.actionHistory = []
 
-    // 重置玩家状态
+    // Reset player states
     this.players.forEach(player => {
       player.cards = []
       player.currentBet = 0
@@ -248,13 +250,13 @@ export class PokerGame {
       player.lastAction = null
     })
 
-    // 发底牌
+    // Deal hole cards
     this.dealHoleCards()
-    
-    // 下盲注
+
+    // Post blinds
     this.postBlinds()
     
-    // 设置第一个行动玩家（大盲注后一位）
+    // Set first action player (after big blind)
     this.currentPlayerIndex = this.getNextActivePlayer((this.dealerIndex + 3) % this.players.length)
   }
 
@@ -280,7 +282,7 @@ export class PokerGame {
     if (activePlayers.length < 2) {
       this.gameStarted = false
       this.gameFinished = true
-      return { success: false, error: '没有足够的玩家开始新一局' }
+      return { success: false, error: 'Not enough players to start a new hand' }
     }
 
     this.advanceDealer()
@@ -291,7 +293,7 @@ export class PokerGame {
     return { success: true, gameState: this.getGameState() }
   }
 
-  // 发底牌
+  // Deal hole cards
   dealHoleCards() {
     for (let i = 0; i < 2; i++) {
       for (const player of this.players) {
@@ -302,19 +304,19 @@ export class PokerGame {
     }
   }
 
-  // 下盲注
+  // Post blinds
   postBlinds() {
     const activePlayersCount = this.players.filter(p => p.active).length
     if (activePlayersCount < 2) return
 
-    // 小盲注
+    // Small blind
     const smallBlindIndex = (this.dealerIndex + 1) % this.players.length
     const smallBlindPlayer = this.players[smallBlindIndex]
     if (smallBlindPlayer && smallBlindPlayer.active) {
       this.playerBet(smallBlindPlayer, Math.min(this.smallBlind, smallBlindPlayer.chips))
     }
 
-    // 大盲注
+    // Big blind
     const bigBlindIndex = (this.dealerIndex + 2) % this.players.length
     const bigBlindPlayer = this.players[bigBlindIndex]
     if (bigBlindPlayer && bigBlindPlayer.active) {
@@ -323,15 +325,15 @@ export class PokerGame {
     }
   }
 
-  // 处理玩家行动
+  // Handle player action
   handlePlayerAction(playerId, action, amount = 0) {
     const player = this.players.find(p => p.id === playerId)
     if (!player || !player.active || player.folded) {
-      return { success: false, error: '无效的玩家' }
+      return { success: false, error: 'Invalid player' }
     }
 
     if (this.players[this.currentPlayerIndex].id !== playerId) {
-      return { success: false, error: '不是您的回合' }
+      return { success: false, error: 'Not your turn' }
     }
 
     let actionResult = { success: true, action: null }
@@ -354,7 +356,7 @@ export class PokerGame {
         actionResult = this.handleAllIn(player)
         break
       default:
-        return { success: false, error: '无效的行动' }
+        return { success: false, error: 'Invalid action' }
     }
 
     if (actionResult.success) {
@@ -365,10 +367,10 @@ export class PokerGame {
         timestamp: Date.now()
       })
 
-      // 移动到下一个玩家
+      // Move to next player
       this.nextPlayer()
       
-      // 检查是否需要进入下一阶段
+      // Check if need to move to next phase
       if (this.isRoundComplete()) {
         this.nextPhase()
       }
@@ -377,42 +379,42 @@ export class PokerGame {
     return actionResult
   }
 
-  // 改进的AI策略
+  // Improved AI strategy
   getAIAction(player) {
     const callAmount = this.currentBet - player.currentBet
     const random = Math.random()
 
-    // 如果没钱了，只能弃牌或全押
+    // If out of chips, can only fold or go all-in
     if (player.chips <= callAmount) {
       const handStrength = this.calculateHandStrength(player)
       return handStrength > 0.5 ? { action: 'all_in' } : { action: 'fold' }
     }
 
-    // 计算手牌强度
+    // Calculate hand strength
     const handStrength = this.calculateHandStrength(player)
     const potOdds = callAmount / (this.pot + callAmount)
     const position = this.getPlayerPosition(player)
 
-    // 如果不需要跟注（可以过牌）
+    // If no need to call (can check)
     if (callAmount === 0) {
-      // 强牌：加注
+      // Strong hand: raise
       if (handStrength > 0.7) {
         const raiseAmount = Math.floor(this.pot * (0.5 + random * 0.5))
         return { action: 'bet', amount: Math.min(raiseAmount, player.chips) }
       }
-      // 中等牌：有时加注，有时过牌
+      // Medium hand: sometimes raise, sometimes check
       if (handStrength > 0.4) {
         if (random < 0.3) {
           return { action: 'bet', amount: this.bigBlind }
         }
         return { action: 'check' }
       }
-      // 弱牌：过牌
+      // Weak hand: check
       return { action: 'check' }
     }
 
-    // 需要跟注的情况
-    // 强牌：加注
+    // Need to call situations
+    // Strong hand: raise
     if (handStrength > 0.75) {
       if (random < 0.7) {
         const raiseAmount = Math.floor(this.currentBet * 2 + this.pot * 0.3)
@@ -421,7 +423,7 @@ export class PokerGame {
       return { action: 'call' }
     }
 
-    // 中等牌：根据赔率决定
+    // Medium hand: decide based on pot odds
     if (handStrength > 0.5) {
       if (potOdds < handStrength - 0.1) {
         return { action: 'call' }
@@ -429,7 +431,7 @@ export class PokerGame {
       return random < 0.6 ? { action: 'call' } : { action: 'fold' }
     }
 
-    // 中下牌：谨慎跟注
+    // Low-medium hand: cautious calling
     if (handStrength > 0.3) {
       if (callAmount <= this.bigBlind * 2 && random < 0.5) {
         return { action: 'call' }
@@ -437,59 +439,59 @@ export class PokerGame {
       return { action: 'fold' }
     }
 
-    // 弱牌：大多数情况弃牌，偶尔诈唬
+    // Weak hand: mostly fold, occasional bluff
     if (position === 'late' && random < 0.15) {
-      // 后位偶尔诈唬
+      // Occasional bluff in late position
       return { action: 'call' }
     }
 
     return { action: 'fold' }
   }
 
-  // 计算手牌强度（0-1之间，1最强）
+  // Calculate hand strength (0-1, where 1 is strongest)
   calculateHandStrength(player) {
     if (!player.cards || player.cards.length === 0) {
       return 0
     }
 
-    // 使用当前可见的牌评估手牌
+    // Evaluate hand using currently visible cards
     const allCards = player.cards.concat(this.communityCards)
     const handRank = this.evaluateHand(allCards)
 
-    // 根据牌型等级返回强度
-    // 9: 同花顺, 8: 四条, 7: 葫芦, 6: 同花, 5: 顺子, 4: 三条, 3: 两对, 2: 一对, 1: 高牌
+    // Return strength based on hand rank
+    // 9: Straight flush, 8: Four of a kind, 7: Full house, 6: Flush, 5: Straight, 4: Three of a kind, 3: Two pair, 2: One pair, 1: High card
     const rankToStrength = {
-      9: 0.95 + Math.random() * 0.05,  // 同花顺: 0.95-1.0
-      8: 0.90 + Math.random() * 0.05,  // 四条: 0.90-0.95
-      7: 0.80 + Math.random() * 0.10,  // 葫芦: 0.80-0.90
-      6: 0.70 + Math.random() * 0.10,  // 同花: 0.70-0.80
-      5: 0.60 + Math.random() * 0.10,  // 顺子: 0.60-0.70
-      4: 0.50 + Math.random() * 0.10,  // 三条: 0.50-0.60
-      3: 0.40 + Math.random() * 0.10,  // 两对: 0.40-0.50
-      2: 0.25 + Math.random() * 0.15,  // 一对: 0.25-0.40
-      1: 0.10 + Math.random() * 0.15   // 高牌: 0.10-0.25
+      9: 0.95 + Math.random() * 0.05,  // Straight flush: 0.95-1.0
+      8: 0.90 + Math.random() * 0.05,  // Four of a kind: 0.90-0.95
+      7: 0.80 + Math.random() * 0.10,  // Full house: 0.80-0.90
+      6: 0.70 + Math.random() * 0.10,  // Flush: 0.70-0.80
+      5: 0.60 + Math.random() * 0.10,  // Straight: 0.60-0.70
+      4: 0.50 + Math.random() * 0.10,  // Three of a kind: 0.50-0.60
+      3: 0.40 + Math.random() * 0.10,  // Two pair: 0.40-0.50
+      2: 0.25 + Math.random() * 0.15,  // One pair: 0.25-0.40
+      1: 0.10 + Math.random() * 0.15   // High card: 0.10-0.25
     }
 
     let strength = rankToStrength[handRank.rank] || 0.2
 
-    // preflop阶段，只看手牌
+    // Preflop stage, only consider hole cards
     if (this.communityCards.length === 0) {
       const [card1, card2] = player.cards
-      // 对子
+      // Pair
       if (card1.value === card2.value) {
-        if (card1.value >= 10) strength = 0.8 + Math.random() * 0.1  // 大对子
+        if (card1.value >= 10) strength = 0.8 + Math.random() * 0.1  // High pair
         else if (card1.value >= 7) strength = 0.6 + Math.random() * 0.15
         else strength = 0.4 + Math.random() * 0.15
       }
-      // 高牌
+      // High cards
       else if (card1.value >= 12 || card2.value >= 12) {
         strength = 0.5 + Math.random() * 0.2
       }
-      // 同花
+      // Suited
       else if (card1.suit === card2.suit) {
         strength += 0.1
       }
-      // 连牌
+      // Connected
       else if (Math.abs(card1.value - card2.value) === 1) {
         strength += 0.05
       }
@@ -498,7 +500,7 @@ export class PokerGame {
     return Math.min(strength, 1.0)
   }
 
-  // 获取玩家位置（早/中/晚）
+  // Get player position (early/middle/late)
   getPlayerPosition(player) {
     const playerIndex = this.players.findIndex(p => p.id === player.id)
     const positionFromDealer = (playerIndex - this.dealerIndex + this.players.length) % this.players.length
@@ -509,7 +511,7 @@ export class PokerGame {
     return 'late'
   }
 
-  // 处理AI行动
+  // Process AI action
   processAIAction() {
     if (this.currentPlayerIndex === -1 || this.gameFinished) {
       return null
@@ -520,15 +522,15 @@ export class PokerGame {
       return null
     }
     
-    console.log(`AI ${currentPlayer.name} 开始行动，当前下注: ${this.currentBet}, 玩家下注: ${currentPlayer.currentBet}`)
-    
+    console.log(`AI ${currentPlayer.name} starting action, current bet: ${this.currentBet}, player bet: ${currentPlayer.currentBet}`)
+
     const aiDecision = this.getAIAction(currentPlayer)
-    console.log(`AI决策: ${aiDecision.action}, 金额: ${aiDecision.amount || 0}`)
+    console.log(`AI decision: ${aiDecision.action}, amount: ${aiDecision.amount || 0}`)
     
     const result = this.handlePlayerAction(currentPlayer.id, aiDecision.action, aiDecision.amount)
     
     if (result.success) {
-      console.log(`AI行动成功: ${aiDecision.action}`)
+      console.log(`AI action successful: ${aiDecision.action}`)
       return {
         playerId: currentPlayer.id,
         playerName: currentPlayer.name,
@@ -537,13 +539,13 @@ export class PokerGame {
         gameState: this.getGameState()
       }
     } else {
-      console.log(`AI行动失败: ${result.error}`)
+      console.log(`AI action failed: ${result.error}`)
     }
     
     return null
   }
 
-  // 弃牌
+  // Fold
   handleFold(player) {
     player.folded = true
     return { 
@@ -552,10 +554,10 @@ export class PokerGame {
     }
   }
 
-  // 过牌
+  // Check
   handleCheck(player) {
     if (this.currentBet > player.currentBet) {
-      return { success: false, error: '无法过牌，当前有下注' }
+      return { success: false, error: 'Cannot check, there is a current bet' }
     }
     
     return { 
@@ -564,7 +566,7 @@ export class PokerGame {
     }
   }
 
-  // 跟注
+  // Call
   handleCall(player) {
     const callAmount = this.currentBet - player.currentBet
     if (callAmount <= 0) {
@@ -581,13 +583,13 @@ export class PokerGame {
     }
   }
 
-  // 下注/加注
+  // Bet/Raise
   handleBet(player, amount) {
     const minBet = this.currentBet > 0 ? this.currentBet * 2 : this.bigBlind
     const maxBet = player.chips
     
     if (amount < minBet && amount < maxBet) {
-      return { success: false, error: `最小下注金额为 ${minBet}` }
+      return { success: false, error: `Minimum bet amount is ${minBet}` }
     }
 
     if (amount > maxBet) {
@@ -605,7 +607,7 @@ export class PokerGame {
     }
   }
 
-  // 全押
+  // All-in
   handleAllIn(player) {
     const amount = player.chips
     this.playerBet(player, amount)
@@ -621,7 +623,7 @@ export class PokerGame {
     }
   }
 
-  // 玩家下注
+  // Player bet
   playerBet(player, amount) {
     const actualAmount = Math.min(amount, player.chips)
     player.chips -= actualAmount
@@ -634,12 +636,12 @@ export class PokerGame {
     }
   }
 
-  // 下一个玩家
+  // Next player
   nextPlayer() {
     this.currentPlayerIndex = this.getNextActivePlayer(this.currentPlayerIndex + 1)
   }
 
-  // 获取下一个活跃玩家
+  // Get next active player
   getNextActivePlayer(startIndex) {
     for (let i = 0; i < this.players.length; i++) {
       const index = (startIndex + i) % this.players.length
@@ -651,7 +653,7 @@ export class PokerGame {
     return -1
   }
 
-  // 检查回合是否完成
+  // Check if round is complete
   isRoundComplete() {
     const activePlayers = this.players.filter(p => p.active && !p.folded)
     
@@ -659,7 +661,7 @@ export class PokerGame {
       return true
     }
 
-    // 检查所有活跃玩家是否都下注相同金额或全押
+    // Check if all active players have bet the same amount or are all-in
     const nonAllInPlayers = activePlayers.filter(p => !p.allIn)
     if (nonAllInPlayers.length === 0) {
       return true
@@ -669,9 +671,9 @@ export class PokerGame {
     return nonAllInPlayers.every(p => p.currentBet === currentBetAmount)
   }
 
-  // 进入下一阶段
+  // Move to next phase
   nextPhase() {
-    // 重置玩家当前下注
+    // Reset player current bets
     this.players.forEach(player => {
       player.currentBet = 0
     })
@@ -696,83 +698,83 @@ export class PokerGame {
         return
     }
 
-    // 设置下一轮的第一个行动玩家（庄家后第一个活跃玩家）
+    // Set first action player for next round (first active player after dealer)
     this.currentPlayerIndex = this.getNextActivePlayer(this.dealerIndex + 1)
   }
 
-  // 发翻牌
+  // Deal flop
   dealFlop() {
-    this.deck.deal() // 烧一张牌
+    this.deck.deal() // Burn one card
     for (let i = 0; i < 3; i++) {
       this.communityCards.push(this.deck.deal())
     }
   }
 
-  // 发转牌
+  // Deal turn
   dealTurn() {
-    this.deck.deal() // 烧一张牌
+    this.deck.deal() // Burn one card
     this.communityCards.push(this.deck.deal())
   }
 
-  // 发河牌
+  // Deal river
   dealRiver() {
-    this.deck.deal() // 烧一张牌
+    this.deck.deal() // Burn one card
     this.communityCards.push(this.deck.deal())
   }
 
-  // 摊牌
+  // Showdown
   showdown() {
     const activePlayers = this.players.filter(p => p.active && !p.folded)
-    
+
     if (activePlayers.length === 1) {
-      // 只有一个玩家，直接获胜
+      // Only one player left, they win directly
       const winner = activePlayers[0]
       winner.chips += this.pot
       this.gameFinished = true
       return
     }
 
-    // 评估所有玩家的牌力
+    // Evaluate all players' hands
     activePlayers.forEach(player => {
       player.handRank = this.evaluateHand(player.cards.concat(this.communityCards))
     })
 
-    // 确定获胜者
+    // Determine winner
     activePlayers.sort((a, b) => this.compareHands(b.handRank, a.handRank))
     const winner = activePlayers[0]
-    
-    // 分配奖池
+
+    // Distribute pot
     winner.chips += this.pot
     this.gameFinished = true
   }
 
-  // 评估牌力（简化版本）
+  // Evaluate hand strength (simplified version)
   evaluateHand(cards) {
-    // 这里是简化的牌力评估，实际应用中需要更复杂的算法
-    // 返回值越大牌力越强
+    // This is a simplified hand evaluation, more complex algorithms needed in production
+    // Higher return value means stronger hand
     const values = cards.map(c => c.value).sort((a, b) => b - a)
 
-    // 检查同花
+    // Check for flush
     const suits = cards.map(c => c.suit)
     const isFlush = suits.some(suit => suits.filter(s => s === suit).length >= 5)
 
-    // 检查顺子
+    // Check for straight
     const isStraight = this.checkStraight(values)
 
-    // 检查对子、三条等
+    // Check for pairs, three of a kind, etc.
     const counts = this.countValues(values)
     const countValues = Object.values(counts).sort((a, b) => b - a)
 
-    if (isFlush && isStraight) return { rank: 9, values } // 同花顺
-    if (countValues[0] === 4) return { rank: 8, values } // 四条
-    if (countValues[0] === 3 && countValues[1] === 2) return { rank: 7, values } // 葫芦
-    if (isFlush) return { rank: 6, values } // 同花
-    if (isStraight) return { rank: 5, values } // 顺子
-    if (countValues[0] === 3) return { rank: 4, values } // 三条
-    if (countValues[0] === 2 && countValues[1] === 2) return { rank: 3, values } // 两对
-    if (countValues[0] === 2) return { rank: 2, values } // 一对
+    if (isFlush && isStraight) return { rank: 9, values } // Straight flush
+    if (countValues[0] === 4) return { rank: 8, values } // Four of a kind
+    if (countValues[0] === 3 && countValues[1] === 2) return { rank: 7, values } // Full house
+    if (isFlush) return { rank: 6, values } // Flush
+    if (isStraight) return { rank: 5, values } // Straight
+    if (countValues[0] === 3) return { rank: 4, values } // Three of a kind
+    if (countValues[0] === 2 && countValues[1] === 2) return { rank: 3, values } // Two pair
+    if (countValues[0] === 2) return { rank: 2, values } // One pair
 
-    return { rank: 1, values } // 高牌
+    return { rank: 1, values } // High card
   }
 
   checkStraight(values) {
@@ -815,7 +817,7 @@ export class PokerGame {
       return hand1.rank - hand2.rank
     }
     
-    // 如果牌型相同，比较具体数值
+    // If hand ranks are the same, compare specific values
     for (let i = 0; i < Math.min(hand1.values.length, hand2.values.length); i++) {
       if (hand1.values[i] !== hand2.values[i]) {
         return hand1.values[i] - hand2.values[i]
@@ -825,7 +827,7 @@ export class PokerGame {
     return 0
   }
 
-  // 获取游戏状态
+  // Get game state
   getGameState() {
     return {
       roomId: this.roomId,
@@ -859,7 +861,7 @@ export class PokerGame {
     }
   }
 
-  // 获取玩家列表
+  // Get player list
   getPlayers() {
     return this.players.map(player => ({
       id: player.id,
@@ -875,7 +877,7 @@ export class PokerGame {
     return this.players.length
   }
 
-  // 检查游戏是否结束
+  // Check if game is finished
   isGameFinished() {
     if (this.gameFinished) {
       return true
@@ -891,7 +893,7 @@ export class PokerGame {
     return false
   }
 
-  // 获取游戏结果
+  // Get game results
   getGameResults() {
     if (!this.gameFinished) return null
 
@@ -901,7 +903,7 @@ export class PokerGame {
     if (activePlayers.length === 1) {
       winner = activePlayers[0]
     } else {
-      // 找到牌力最强的玩家
+      // Find player with strongest hand
       activePlayers.forEach(player => {
         if (!player.handRank) {
           player.handRank = this.evaluateHand(player.cards.concat(this.communityCards))

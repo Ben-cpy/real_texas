@@ -86,7 +86,7 @@ export const useGameStore = defineStore('game', () => {
     socketService.on('connection_status', (data) => {
       isConnected.value = data.connected
       if (!data.connected) {
-        error.value = '连接已断开'
+        error.value = 'Connection lost'
       }
     })
 
@@ -108,6 +108,7 @@ export const useGameStore = defineStore('game', () => {
     socketService.on('game_update', handleGameUpdate)
     socketService.on('game_started', handleGameStarted)
     socketService.on('game_finished', handleGameFinished)
+    socketService.on('game_reset', handleGameReset)
     socketService.on('action_error', handleActionError)
     socketService.on('error', handleError)
   }
@@ -234,6 +235,15 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+  function handleGameReset(data) {
+    console.log('Game reset:', data)
+    if (data.gameState) {
+      updateGameState(data.gameState)
+    }
+    winners.value = []
+    lastAction.value = null
+  }
+
   function handleActionError(data) {
     console.error('Action error:', data)
     error.value = data.error
@@ -310,6 +320,7 @@ export const useGameStore = defineStore('game', () => {
     socketService.off('game_update', handleGameUpdate)
     socketService.off('game_started', handleGameStarted)
     socketService.off('game_finished', handleGameFinished)
+    socketService.off('game_reset', handleGameReset)
     socketService.off('action_error', handleActionError)
     socketService.off('error', handleError)
   }

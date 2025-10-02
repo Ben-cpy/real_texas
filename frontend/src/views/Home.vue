@@ -2,8 +2,13 @@
   <div class="home">
     <div class="container">
       <header class="header">
-        <h1 class="title">德州扑克</h1>
-        <p class="subtitle">专业的在线德州扑克游戏平台</p>
+        <div class="header-content">
+          <div class="header-text">
+            <h1 class="title">德州扑克</h1>
+            <p class="subtitle">专业的在线德州扑克游戏平台</p>
+          </div>
+          <button class="btn btn-logout" @click="handleLogout">Logout</button>
+        </div>
       </header>
       
       <main class="main-content">
@@ -44,6 +49,13 @@
                 <div class="stat-label">筹码</div>
               </div>
             </div>
+            <button
+              v-if="userStats.chips < 1000"
+              class="btn btn-relief"
+              @click="claimReliefFund"
+            >
+              领取救济金 (10,000筹码)
+            </button>
           </div>
         </div>
       </main>
@@ -121,6 +133,25 @@ const joinRoom = async () => {
   }
 }
 
+const handleLogout = () => {
+  userStore.logout()
+  router.push('/login')
+}
+
+const claimReliefFund = async () => {
+  try {
+    const response = await api.claimReliefFund()
+    if (response.success) {
+      ElMessage.success(`成功领取救济金！当前筹码: ${response.chips}`)
+      await userStore.refreshProfile()
+    } else {
+      ElMessage.error(response.message || '领取失败')
+    }
+  } catch (error) {
+    ElMessage.error(error.response?.data?.error || '领取救济金失败')
+  }
+}
+
 onMounted(async () => {
   // Refresh user profile to get latest stats
   await userStore.refreshProfile()
@@ -135,8 +166,19 @@ onMounted(async () => {
 }
 
 .header {
-  text-align: center;
   margin-bottom: 60px;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.header-text {
+  flex: 1;
+  text-align: center;
 }
 
 .title {
@@ -152,6 +194,24 @@ onMounted(async () => {
 .subtitle {
   font-size: 1.2rem;
   color: #ccc;
+}
+
+.btn-logout {
+  padding: 10px 20px;
+  background: transparent;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.btn-logout:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
 }
 
 .game-modes {
@@ -221,6 +281,27 @@ onMounted(async () => {
 .stat-label {
   font-size: 0.9rem;
   color: #ccc;
+}
+
+.btn-relief {
+  width: 100%;
+  margin-top: 20px;
+  padding: 15px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+}
+
+.btn-relief:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
 }
 
 @media (max-width: 768px) {

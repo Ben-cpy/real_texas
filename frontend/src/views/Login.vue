@@ -261,13 +261,25 @@ const register = async () => {
 }
 
 .login-card :deep(.el-input__inner) {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.1) !important;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
 }
 
 .login-card :deep(.el-input__inner::placeholder) {
-  color: #ccc;
+  color: rgba(204, 204, 204, 0.6);
+  -webkit-text-fill-color: rgba(204, 204, 204, 0.6);
+}
+
+.login-card :deep(.el-input__inner:-webkit-autofill),
+.login-card :deep(.el-input__inner:-webkit-autofill:hover),
+.login-card :deep(.el-input__inner:-webkit-autofill:focus),
+.login-card :deep(.el-input__inner:-webkit-autofill:active) {
+  -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.1) inset !important;
+  -webkit-text-fill-color: #fff !important;
+  color: #fff !important;
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 .login-card :deep(.el-input__prefix) {

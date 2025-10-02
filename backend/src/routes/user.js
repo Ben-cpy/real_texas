@@ -105,7 +105,7 @@ router.get('/stats', async (req, res) => {
 router.get('/leaderboard', async (req, res) => {
   try {
     const { type = 'chips', limit = 10 } = req.query
-    
+
     let orderBy = 'chips'
     if (type === 'wins') {
       orderBy = 'gamesWon'
@@ -115,7 +115,7 @@ router.get('/leaderboard', async (req, res) => {
     }
 
     const users = await User.getLeaderboard(orderBy, parseInt(limit))
-    
+
     const leaderboard = users.map((user, index) => ({
       rank: index + 1,
       username: user.username,
@@ -130,6 +130,47 @@ router.get('/leaderboard', async (req, res) => {
   } catch (error) {
     console.error('获取排行榜错误:', error)
     res.status(500).json({ error: '服务器内部错误' })
+  }
+})
+
+// 领取救济金
+router.post('/relief-fund', async (req, res) => {
+  try {
+    const { userId } = req.user
+
+    const user = await User.findById(userId)
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+
+    // 检查是否有资格领取救济金（筹码少于1000）
+    if (user.chips >= 1000) {
+      return res.status(400).json({
+        success: false,
+        message: '您的筹码充足，暂时不能领取救济金',
+        chips: user.chips
+      })
+    }
+
+    // 增加10000筹码
+    const reliefAmount = 10000
+    await User.updateChips(userId, user.chips + reliefAmount)
+
+    const updatedUser = await User.findById(userId)
+
+    res.json({
+      success: true,
+      message: `成功领取救济金 ${reliefAmount} 筹码`,
+      chips: updatedUser.chips,
+      reliefAmount
+    })
+
+  } catch (error) {
+    console.error('领取救济金错误:', error)
+    res.status(500).json({
+      success: false,
+      error: '服务器内部错误'
+    })
   }
 })
 

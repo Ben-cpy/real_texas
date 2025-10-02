@@ -191,5 +191,14 @@ export const getRoomDetails = async (roomId) => {
   return response.data
 }
 
+/**
+ * Claim relief fund (10,000 chips)
+ * @returns {Promise} Response with updated chip count
+ */
+export const claimReliefFund = async () => {
+  const response = await apiClient.post('/api/user/relief-fund')
+  return response.data
+}
+
 // Export the axios instance for custom requests if needed
 export default apiClient

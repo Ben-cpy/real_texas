@@ -3,17 +3,17 @@
     <!-- Game Header -->
     <header class="game-header">
       <div class="game-info">
-        <h1 class="game-title">德州扑克</h1>
+        <h1 class="game-title">Texas Hold'em</h1>
         <div class="room-details">
-          <span class="room-id">房间: {{ gameStore.roomId || 'N/A' }}</span>
-          <span class="blinds">底注: ${{ gameStore.smallBlind }}/${{ gameStore.bigBlind }}</span>
-          <span class="seats">座位: {{ gameStore.players.length }}/{{ gameStore.desiredSeatCount }}</span>
+          <span class="room-id">Room: {{ gameStore.roomId || 'N/A' }}</span>
+          <span class="blinds">Blinds: ${{ gameStore.smallBlind }}/${{ gameStore.bigBlind }}</span>
+          <span class="seats">Seats: {{ gameStore.players.length }}/{{ gameStore.desiredSeatCount }}</span>
         </div>
       </div>
       <div class="user-controls">
         <div class="user-identity">
           <span class="username">{{ userStore.username }}</span>
-          <span v-if="gameStore.isRoomCreator" class="user-role">房主</span>
+          <span v-if="gameStore.isRoomCreator" class="user-role">Host</span>
         </div>
         <div class="control-buttons">
           <div
@@ -21,20 +21,20 @@
             class="player-seat-controls"
           >
             <button
-              class="btn btn-secondary"
+              class="btn btn-minimal"
               @click="decreaseSeats"
               :disabled="seatDecreaseDisabled"
-              title="减少座位"
+              title="Decrease seats"
             >
               -
             </button>
-            <span class="seat-count">座位 {{ gameStore.desiredSeatCount }}</span>
+            <span class="seat-count">Seats {{ gameStore.desiredSeatCount }}</span>
             <span class="ai-count">AI {{ aiPlayerCount }}</span>
             <button
-              class="btn btn-secondary"
+              class="btn btn-minimal"
               @click="increaseSeats"
               :disabled="seatIncreaseDisabled"
-              title="增加座位"
+              title="Increase seats"
             >
               +
             </button>
@@ -45,19 +45,19 @@
             @click="startGame"
             :disabled="!gameStore.canStartGame"
           >
-            开始游戏 ({{ gameStore.players.length }}/{{ gameStore.desiredSeatCount }})
+            Start Game ({{ gameStore.players.length }}/{{ gameStore.desiredSeatCount }})
           </button>
           <span
             v-if="gameStore.gamePhase === 'waiting' && !gameStore.isRoomCreator"
             class="waiting-status"
           >
-            等待房主开始…
+            Waiting for host to start…
           </span>
           <button
             class="btn"
             :class="soundEnabled ? 'btn-primary' : 'btn-secondary'"
             @click="toggleSound"
-            title="切换音效"
+            title="Toggle sound effects"
           >
             {{ soundEnabled ? '🔊' : '🔇' }}
           </button>
@@ -66,10 +66,10 @@
             class="btn btn-warning"
             @click="resetGame"
           >
-            重开
+            Restart
           </button>
-          <button class="btn btn-danger" @click="leaveGame">离开</button>
-          <button class="btn btn-outline" @click="handleLogout">退出登录</button>
+          <button class="btn btn-danger" @click="leaveGame">Leave</button>
+          <button class="btn btn-outline" @click="handleLogout">Logout</button>
         </div>
       </div>
     </header>
@@ -78,18 +78,20 @@
     <main class="game-main">
       <!-- Poker Table Container -->
       <section class="table-container">
+        <!-- Pot Display (upper left) -->
+        <div class="pot-display-corner">
+          <div class="pot-amount">Pot: ${{ gameStore.totalPot }}</div>
+          <div class="current-bet" v-if="gameStore.currentBet > 0">Current Bet: ${{ gameStore.currentBet }}</div>
+        </div>
+
         <div class="poker-table" ref="pokerTableRef">
           <!-- Community Cards Area -->
           <div class="community-area">
-            <div class="pot-display">
-              <div class="pot-amount">奖池 ${{ gameStore.totalPot }}</div>
-              <div class="current-bet" v-if="gameStore.currentBet > 0">下注 ${{ gameStore.currentBet }}</div>
-            </div>
             <div class="community-cards">
               <div
                 v-for="(card, index) in gameStore.communityCards"
                 :key="`community-${index}`"
-                class="game-card"
+                class="game-card community-card"
               >
                 <span :class="getCardColor(card.suit)">
                   {{ card.suit }}{{ card.rank }}
@@ -124,10 +126,13 @@
               <div class="player-details">
                 <div class="player-name">{{ player.name }}</div>
                 <div class="player-chips">${{ player.chips }}</div>
-                <div class="player-action" v-if="player.lastAction">
+                <div class="player-status" v-if="player.folded">
+                  <span class="fold-indicator">FOLDED</span>
+                </div>
+                <div class="player-action" v-else-if="player.lastAction && !player.folded">
                   {{ getActionText(player.lastAction) }}
                 </div>
-                <div class="player-bet" v-if="player.currentBet > 0">
+                <div class="player-bet" v-if="player.currentBet > 0 && !player.folded">
                   ${{ player.currentBet }}
                 </div>
               </div>
@@ -159,13 +164,13 @@
       <aside class="side-panel">
         <!-- Action Panel -->
         <section class="action-panel" v-if="gameStore.isMyTurn">
-          <h3 class="panel-title">您的回合</h3>
+          <h3 class="panel-title">Your Turn</h3>
 
           <!-- Primary Actions -->
           <div class="primary-actions">
             <button class="action-btn fold-btn" @click="fold">
               <span class="btn-label">FOLD</span>
-              <span class="btn-desc">弃牌</span>
+              <span class="btn-desc">Fold</span>
             </button>
 
             <button
@@ -174,7 +179,7 @@
             >
               <span class="btn-label">{{ canCheck ? 'CHECK' : 'CALL' }}</span>
               <span class="btn-desc">
-                {{ canCheck ? '过牌' : `跟注 $${callAmount}` }}
+                {{ canCheck ? 'Check' : `Call $${callAmount}` }}
               </span>
             </button>
 
@@ -183,18 +188,18 @@
               @click="showRaiseDialog = true"
             >
               <span class="btn-label">RAISE</span>
-              <span class="btn-desc">加注</span>
+              <span class="btn-desc">Raise</span>
             </button>
 
             <button class="action-btn allin-btn" @click="allIn">
               <span class="btn-label">ALL-IN</span>
-              <span class="btn-desc">全下</span>
+              <span class="btn-desc">All-in</span>
             </button>
           </div>
 
           <!-- Raise Dialog -->
           <div v-if="showRaiseDialog" class="raise-dialog">
-            <h4>加注金额</h4>
+            <h4>Raise Amount</h4>
             <input
               v-model.number="raiseAmount"
               type="number"
@@ -203,15 +208,15 @@
               class="raise-input"
             />
             <div class="raise-actions">
-              <button @click="showRaiseDialog = false" class="btn btn-secondary">取消</button>
-              <button @click="raise" class="btn btn-primary">确认加注</button>
+              <button @click="showRaiseDialog = false" class="btn btn-secondary">Cancel</button>
+              <button @click="raise" class="btn btn-primary">Confirm Raise</button>
             </div>
           </div>
         </section>
 
         <!-- Chat Panel -->
         <section class="chat-panel">
-          <h3 class="panel-title">聊天</h3>
+          <h3 class="panel-title">Chat</h3>
           <div class="chat-messages">
             <div v-for="(msg, index) in chatMessages" :key="index" class="chat-message" :class="{ 'own-message': msg.userId === userStore.user?.id }">
               <span class="chat-username">{{ msg.username }}:</span>
@@ -223,17 +228,17 @@
               v-model="chatInput"
               @keyup.enter="sendChatMessage"
               type="text"
-              placeholder="输入消息..."
+              placeholder="Type message..."
               class="chat-input"
               maxlength="200"
             />
-            <button @click="sendChatMessage" class="btn btn-primary chat-send-btn">发送</button>
+            <button @click="sendChatMessage" class="btn btn-primary chat-send-btn">Send</button>
           </div>
         </section>
 
         <!-- Game Log -->
         <section class="game-log">
-          <h3 class="panel-title">游戏记录</h3>
+          <h3 class="panel-title">Game Log</h3>
           <div class="log-entries">
             <div v-for="(log, index) in gameLogs" :key="index" class="log-entry">
               {{ log }}
@@ -358,43 +363,43 @@ const getActionText = (action) => {
 const fold = () => {
   soundService.playFold()
   gameStore.sendAction('fold')
-  addLog('您选择了弃牌')
+  addLog('You chose to fold')
 }
 
 const check = () => {
   soundService.playCheck()
   gameStore.sendAction('check')
-  addLog('您选择了过牌')
+  addLog('You chose to check')
 }
 
 const call = () => {
   soundService.playCall()
   gameStore.sendAction('call')
-  addLog(`您跟注 $${callAmount.value}`)
+  addLog(`You called $${callAmount.value}`)
 }
 
 const raise = () => {
   if (raiseAmount.value < gameStore.minRaise) {
     soundService.playError()
-    ElMessage.error(`最小加注金额为 $${gameStore.minRaise}`)
+    ElMessage.error(`Minimum raise amount is $${gameStore.minRaise}`)
     return
   }
   soundService.playRaise()
   gameStore.sendAction('raise', raiseAmount.value)
-  addLog(`您加注 $${raiseAmount.value}`)
+  addLog(`You raised $${raiseAmount.value}`)
   showRaiseDialog.value = false
 }
 
 const allIn = () => {
   soundService.playAllIn()
   gameStore.sendAction('all_in')
-  addLog('您选择了全下！')
+  addLog('You went all-in!')
 }
 
 const startGame = () => {
   soundService.playGameStart()
   gameStore.startGame()
-  addLog('游戏开始！')
+  addLog('Game started!')
 }
 
 const resetGame = () => {
@@ -404,7 +409,7 @@ const resetGame = () => {
 
   soundService.playClick()
   gameStore.resetGame()
-  addLog('游戏重置')
+  addLog('Game reset')
 }
 
 const leaveGame = () => {
@@ -481,7 +486,7 @@ const joinCurrentRoom = () => {
     gameLogs.value = []
     chatMessages.value = []
     gameStore.joinRoom(targetRoom)
-    addLog('已连接到游戏服务器')
+    addLog('Connected to game server')
     hasJoinedRoom.value = true
   } else {
     socketService.joinRoom(targetRoom)
@@ -683,7 +688,8 @@ onBeforeUnmount(() => {
 <style scoped>
 /* Import CSS Custom Properties */
 .game {
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
   background: var(--color-background);
   padding: var(--space-md);
   position: relative;
@@ -793,6 +799,26 @@ onBeforeUnmount(() => {
   transform: translateY(-2px);
 }
 
+.btn-minimal {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-md);
+  transition: all var(--transition-base);
+}
+
+.btn-minimal:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.btn-minimal:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 .waiting-status {
   color: var(--color-warning);
   font-style: italic;
@@ -809,15 +835,53 @@ onBeforeUnmount(() => {
   grid-template-columns: 1fr auto;
   gap: var(--space-lg);
   min-height: 0;
+  max-height: 100%;
   position: relative;
   z-index: 1;
+  overflow: hidden;
 }
 
 .table-container {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.pot-display-corner {
+  position: absolute;
+  top: var(--space-md);
+  left: var(--space-md);
+  z-index: 100;
+  background: rgba(31, 41, 55, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: var(--border-radius-lg);
+  padding: var(--space-md);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  box-shadow: var(--shadow-lg);
+  min-width: clamp(120px, 15vw, 180px);
+}
+
+.pot-display-corner .pot-amount {
+  color: var(--color-warning);
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: clamp(1rem, 2.5vw, 1.4rem);
+  margin: 0;
+  text-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
+  letter-spacing: 0.5px;
+}
+
+.pot-display-corner .current-bet {
+  color: var(--color-text-primary);
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 600;
+  font-size: clamp(0.85rem, 2vw, 1rem);
+  margin-top: var(--space-xs);
+  opacity: 0.9;
 }
 
 .side-panel {
@@ -887,40 +951,11 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
-.pot-display {
-  background: rgba(31, 41, 55, 0.8);
-  border-radius: var(--border-radius-lg);
-  padding: var(--space-md);
-  margin-bottom: var(--space-md);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  box-shadow: var(--shadow-md);
-}
-
 .community-cards {
   display: flex;
   gap: var(--space-sm);
   justify-content: center;
   flex-wrap: wrap;
-}
-
-.pot-amount {
-  color: var(--color-warning);
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 800;
-  font-size: clamp(1.2rem, 3vw, 1.8rem);
-  margin: 0;
-  text-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
-  letter-spacing: 0.5px;
-}
-
-.current-bet {
-  color: var(--color-text-primary);
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 600;
-  font-size: var(--font-size-md);
-  margin-top: var(--space-xs);
-  opacity: 0.9;
 }
 
 
@@ -1007,11 +1042,13 @@ onBeforeUnmount(() => {
   font-size: clamp(0.8rem, 2vw, 1.2rem);
 }
 
-.game-card.revealed {
+.game-card.revealed,
+.community-card {
   transform: rotateY(0deg);
+  background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
 }
 
-.game-card:not(.revealed) {
+.game-card:not(.revealed):not(.community-card) {
   background: #4a5568;
   color: #fff;
 }
@@ -1209,6 +1246,36 @@ onBeforeUnmount(() => {
   letter-spacing: 0.5px;
   box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.3);
   border: 1px solid rgba(217, 119, 6, 0.5);
+  animation: action-fade-in 0.3s ease-out;
+}
+
+@keyframes action-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.player-status {
+  margin: var(--space-xs) 0;
+}
+
+.fold-indicator {
+  display: inline-block;
+  background: rgba(220, 38, 38, 0.8);
+  color: #fff;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: clamp(0.6rem, 1.2vw, 0.8rem);
+  padding: var(--space-xs);
+  border-radius: var(--border-radius-sm);
+  letter-spacing: 0.5px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(239, 68, 68, 0.5);
 }
 
 .player-name {

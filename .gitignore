@@ -55,3 +55,6 @@ lcov.info
 
 # Optional: ignore local Claude config
 .claude/
+
+*.png
+bug.md

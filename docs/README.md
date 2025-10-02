@@ -1,71 +1,71 @@
-# 项目文档索引
+# Project Documentation Index
 
-欢迎查看德州扑克游戏项目的完整文档！
+Welcome to the complete documentation for the Texas Hold'em poker game project!
 
-## 📖 文档列表
+## 📖 Documentation List
 
-### 🚀 快速开始
-- **[快速入门.md](./快速入门.md)** - 德州扑克游戏规则、流程和术语详解
-  - 游戏目标和基本流程
-  - 关键操作和规则
-  - 完整的术语解释
-  - 新手建议和常见误区
+### 🚀 Quick Start
+- **[Quick-Start.md](./Quick-Start.md)** - Detailed explanation of Texas Hold'em poker rules, procedures, and terminology
+  - Game objectives and basic procedures
+  - Key operations and rules
+  - Complete terminology explanations
+  - Beginner tips and common misconceptions
 
-### 📊 参考资料  
-- **[牌力对比图.md](./牌力对比图.md)** - 详细的牌型强弱对比表
-  - 10种牌型完整排序
-  - 牌面点数和花色说明  
-  - 详细的比较规则
-  - 概率统计和实用提示
-  - 前端开发资源引用
+### 📊 Reference Materials
+- **[Poker-Hand-Rankings.md](./Poker-Hand-Rankings.md)** - Detailed hand strength comparison table
+  - Complete ranking of all 10 hand types
+  - Card point values and suit explanations
+  - Detailed comparison rules
+  - Probability statistics and practical tips
+  - Frontend development resource references
 
-## 🎨 可视化资源
+## 🎨 Visualization Resources
 
-### 图表文件
-- **SVG牌力图表**: `../frontend/src/assets/images/poker-hand-rankings.svg`
-  - 精美的可视化牌型排序图
-  - 适用于网页展示和打印
-  - 包含中英文对照
+### Chart Files
+- **SVG Poker Hand Rankings Chart**: `../frontend/src/assets/images/poker-hand-rankings.svg`
+  - Beautiful visualization of hand rankings
+  - Suitable for web display and printing
+  - Includes bilingual (Chinese-English) labels
 
-### 数据文件
-- **牌力数据**: `../frontend/src/assets/poker-rankings-data.json`
-  - 结构化的牌型数据
-  - 包含概率、颜色、强度信息
-  - 可直接在前端代码中导入使用
+### Data Files
+- **Poker Rankings Data**: `../frontend/src/assets/poker-rankings-data.json`
+  - Structured hand type data
+  - Contains probability, color, and strength information
+  - Ready for direct import and use in frontend code
 
-## 🔧 开发文档
+## 🔧 Development Documentation
 
-### 项目说明
-- **[../CLAUDE.md](../CLAUDE.md)** - 完整的项目架构和开发指南
-  - 后端和前端技术栈
-  - 目录结构说明
-  - 开发命令和部署方式
-  - 代码规范和注意事项
+### Project Description
+- **[../CLAUDE.md](../CLAUDE.md)** - Complete project architecture and development guide
+  - Backend and frontend technology stack
+  - Directory structure explanation
+  - Development commands and deployment methods
+  - Code standards and important notes
 
-### 核心代码
-- **游戏引擎**: `../backend/src/services/PokerGame.js`
-- **数据模型**: `../backend/src/models/`
-- **前端组件**: `../frontend/src/views/`
+### Core Code
+- **Game Engine**: `../backend/src/services/PokerGame.js`
+- **Data Models**: `../backend/src/models/`
+- **Frontend Components**: `../frontend/src/views/`
 
-## 📱 使用指南
+## 📱 Usage Guide
 
-### 开发者
-1. 阅读 [../CLAUDE.md](../CLAUDE.md) 了解项目架构
-2. 查看 [快速入门.md](./快速入门.md) 理解游戏逻辑
-3. 参考 [牌力对比图.md](./牌力对比图.md) 开发牌型相关功能
+### For Developers
+1. Read [../CLAUDE.md](../CLAUDE.md) to understand project architecture
+2. Check [Quick-Start.md](./Quick-Start.md) to understand game logic
+3. Reference [Poker-Hand-Rankings.md](./Poker-Hand-Rankings.md) for hand-related development
 
-### 用户
-1. 从 [快速入门.md](./快速入门.md) 开始学习德州扑克
-2. 使用 [牌力对比图.md](./牌力对比图.md) 作为游戏参考手册
+### For Users
+1. Start learning Texas Hold'em from [Quick-Start.md](./Quick-Start.md)
+2. Use [Poker-Hand-Rankings.md](./Poker-Hand-Rankings.md) as a game reference manual
 
-## 🎯 文档特色
+## 🎯 Documentation Features
 
-- **📊 可视化**: 精美的SVG图表，支持网页和打印
-- **🔍 详细**: 完整的规则说明和概率统计  
-- **💻 开发友好**: 提供JSON数据和代码示例
-- **🌐 双语**: 中英文术语对照
-- **📱 响应式**: 适配各种屏幕尺寸
+- **📊 Visualization**: Beautiful SVG charts supporting web display and printing
+- **🔍 Detailed**: Complete rule explanations and probability statistics
+- **💻 Developer-Friendly**: JSON data and code examples provided
+- **🌐 Bilingual**: Chinese-English terminology comparison
+- **📱 Responsive**: Adaptable to various screen sizes
 
 ---
 
-*文档持续更新中，与项目代码保持同步* ✨
+*Documentation continuously updated and synchronized with project code* ✨

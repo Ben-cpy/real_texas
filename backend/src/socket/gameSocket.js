@@ -4,7 +4,7 @@ import { GameRoom } from '../models/GameRoom.js'
 import { PokerGame } from '../services/PokerGame.js'
 import { checkAchievements, ACHIEVEMENTS } from '../services/achievements.js'
 
-// 存储活跃的游戏房间
+// Store active game rooms
 const activeRooms = new Map()
 
 const broadcastPlayerList = (io, roomId, game) => {
@@ -31,7 +31,7 @@ const broadcastPlayerList = (io, roomId, game) => {
 
 const updateSeatCount = async (socket, io, computeDesired) => {
   if (!socket.userId || !socket.currentRoomId) {
-    socket.emit('error', { error: '无效的游戏状态' })
+    socket.emit('error', { error: 'Invalid game state' })
     return null
   }
 
@@ -39,23 +39,23 @@ const updateSeatCount = async (socket, io, computeDesired) => {
   const game = activeRooms.get(roomId)
 
   if (!game) {
-    socket.emit('error', { error: '游戏不存在' })
+    socket.emit('error', { error: 'Game does not exist' })
     return null
   }
 
   if (game.gameStarted) {
-    socket.emit('error', { error: '游戏进行中无法调整座位' })
+    socket.emit('error', { error: 'Cannot adjust seats while game is in progress' })
     return null
   }
 
   if (typeof game.setDesiredSeatCount !== 'function') {
-    socket.emit('error', { error: '当前模式不支持调整玩家数量' })
+    socket.emit('error', { error: 'Current mode does not support adjusting player count' })
     return null
   }
 
   const room = await GameRoom.findById(roomId)
   if (room.creator_id !== socket.userId) {
-    socket.emit('error', { error: '只有房主可以调整玩家数量' })
+    socket.emit('error', { error: 'Only room creator can adjust player count' })
     return null
   }
 
@@ -65,7 +65,7 @@ const updateSeatCount = async (socket, io, computeDesired) => {
 
   let desiredSeatCount = computeDesired(currentSeatTarget, game)
   if (typeof desiredSeatCount !== 'number' || Number.isNaN(desiredSeatCount)) {
-    socket.emit('error', { error: '无效的玩家数量' })
+    socket.emit('error', { error: 'Invalid player count' })
     return null
   }
 
@@ -86,9 +86,9 @@ const updateSeatCount = async (socket, io, computeDesired) => {
 
 
 export const handleSocketConnection = (socket, io) => {
-  console.log(`Socket连接: ${socket.id}`)
+  console.log(`Socket connected: ${socket.id}`)
 
-  // 验证用户身份
+  // Verify user identity
   socket.on('authenticate', async (data) => {
     try {
       const { token } = data
@@ -96,7 +96,7 @@ export const handleSocketConnection = (socket, io) => {
       const user = await User.findById(decoded.userId)
       
       if (!user) {
-        socket.emit('auth_error', { error: '用户不存在' })
+        socket.emit('auth_error', { error: 'User does not exist' })
         return
       }
 
@@ -110,19 +110,19 @@ export const handleSocketConnection = (socket, io) => {
         }
       })
 
-      console.log(`用户 ${user.username} 已认证`)
+      console.log(`User ${user.username} authenticated`)
 
     } catch (error) {
-      console.error('Socket认证错误:', error)
-      socket.emit('auth_error', { error: '认证失败' })
+      console.error('Socket authentication error:', error)
+      socket.emit('auth_error', { error: 'Authentication failed' })
     }
   })
 
-  // 加入房间
+  // Join room
   socket.on('join_room', async (data) => {
     try {
       if (!socket.userId) {
-        socket.emit('error', { error: '请先登录' })
+        socket.emit('error', { error: 'Please login first' })
         return
       }
 
@@ -130,29 +130,29 @@ export const handleSocketConnection = (socket, io) => {
       let room = await GameRoom.findById(roomId)
       
       if (!room) {
-        // 如果房间不存在，创建默认房间
+        // If room doesn't exist, create default room
         try {
           room = await GameRoom.create({
             id: roomId,
-            name: '默认游戏房间',
+            name: 'Default Game Room',
             creatorId: socket.userId,
             maxPlayers: 6,
             smallBlind: 10,
             bigBlind: 20
           })
-          console.log(`创建默认房间: ${roomId}`)
+          console.log(`Created default room: ${roomId}`)
         } catch (createError) {
-          console.error('创建房间失败:', createError)
-          socket.emit('error', { error: '无法创建房间' })
+          console.error('Failed to create room:', createError)
+          socket.emit('error', { error: 'Unable to create room' })
           return
         }
       }
 
-      // 获取或创建游戏实例
+      // Get or create game instance
       const isSinglePlayerRoom = roomId === 'default-room'
       const maxSeatLimit = room.max_players || 6
 
-      // 获取或创建游戏实例
+      // Get or create game instance
       let game = activeRooms.get(roomId)
       if (!game) {
         game = new PokerGame(roomId, {
@@ -167,7 +167,7 @@ export const handleSocketConnection = (socket, io) => {
         game.singlePlayerMode = true
       }
 
-      // 添加玩家到游戏
+      // Add player to game
       const user = await User.findById(socket.userId)
       const success = game.addPlayer({
         id: user.id,
@@ -231,13 +231,13 @@ export const handleSocketConnection = (socket, io) => {
   socket.on('game_action', async (data) => {
     try {
       if (!socket.userId || !socket.currentRoomId) {
-        socket.emit('error', { error: '无效的游戏状态' })
+        socket.emit('error', { error: 'Invalid game state' })
         return
       }
 
       const game = activeRooms.get(socket.currentRoomId)
       if (!game) {
-        socket.emit('error', { error: '游戏不存在' })
+        socket.emit('error', { error: 'Game does not exist' })
         return
       }
 
@@ -279,13 +279,13 @@ export const handleSocketConnection = (socket, io) => {
   socket.on('start_game', async () => {
     try {
       if (!socket.userId || !socket.currentRoomId) {
-        socket.emit('error', { error: '无效的游戏状态' })
+        socket.emit('error', { error: 'Invalid game state' })
         return
       }
 
       const game = activeRooms.get(socket.currentRoomId)
       if (!game) {
-        socket.emit('error', { error: '游戏不存在' })
+        socket.emit('error', { error: 'Game does not exist' })
         return
       }
 
@@ -322,13 +322,13 @@ export const handleSocketConnection = (socket, io) => {
   socket.on('reset_game', async () => {
     try {
       if (!socket.userId || !socket.currentRoomId) {
-        socket.emit('error', { error: '无效的游戏状态' })
+        socket.emit('error', { error: 'Invalid game state' })
         return
       }
 
       const game = activeRooms.get(socket.currentRoomId)
       if (!game) {
-        socket.emit('error', { error: '游戏不存在' })
+        socket.emit('error', { error: 'Game does not exist' })
         return
       }
 
@@ -490,17 +490,17 @@ const processAIActions = async (game, roomId, io) => {
     const playerCount = typeof game.getPlayers === 'function' ? game.getPlayers().length : (game.players?.length || 0)
     const maxAIActions = Math.max(60, playerCount * 12) // 防止无限循环，并确保足够的AI行动次数
     let aiActionCount = 0
-    
+
     while (aiActionCount < maxAIActions) {
       const aiResult = game.processAIAction()
-      
+
       if (!aiResult) {
         // 没有AI需要行动，或者游戏结束
         break
       }
-      
+
       aiActionCount++
-      
+
       // 广播AI行动
       io.to(roomId).emit('ai_action', {
         playerId: aiResult.playerId,
@@ -508,7 +508,7 @@ const processAIActions = async (game, roomId, io) => {
         action: aiResult.action,
         amount: aiResult.amount
       })
-      
+
       // 广播游戏状态更新
       io.to(roomId).emit('game_update', {
         gameState: aiResult.gameState,
@@ -521,9 +521,9 @@ const processAIActions = async (game, roomId, io) => {
       
       // 更新数据库中的游戏状态
       await GameRoom.updateGameState(roomId, aiResult.gameState)
-      
-      // AI行动间隔
-      await new Promise(resolve => setTimeout(resolve, 800))
+
+      // AI行动间隔 - 5秒延迟让玩家能够看清AI的操作
+      await new Promise(resolve => setTimeout(resolve, 5000))
       
       // 检查游戏是否结束
       if (game.isGameFinished()) {
