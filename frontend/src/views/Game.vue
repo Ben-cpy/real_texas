@@ -156,6 +156,14 @@
                 }
               ]"
             >
+              <div
+                v-if="seat.player.id === currentTurnPlayerId"
+                class="turn-indicator"
+                aria-hidden="true"
+              >
+                <span class="indicator-dot"></span>
+                <span class="indicator-text">思考中</span>
+              </div>
               <div class="seat-frame">
                 <div class="seat-header">
                   <span class="name">{{ seat.player.name }}</span>
@@ -194,6 +202,64 @@
             </div>
           </div>
         </div>
+
+
+        <transition name="showdown-summary">
+          <div v-if="showShowdownSummary" class="showdown-summary" aria-live="polite">
+            <div class="summary-header">
+              <h3>Showdown</h3>
+              <span class="summary-pot">Pot ${{ showdownPot }}</span>
+            </div>
+            <div class="summary-board">
+              <div
+                v-for="(card, index) in paddedCommunityCards"
+                :key="`showdown-board-${index}`"
+                class="card-slot"
+                :class="{ revealed: !!card }"
+              >
+                <span
+                  v-if="card"
+                  class="card-face"
+                  :class="getCardColor(card.suit)"
+                >
+                  {{ card.suit }}{{ card.rank }}
+                </span>
+                <div v-else class="card-back small"></div>
+              </div>
+            </div>
+            <div class="summary-players">
+              <div
+                v-for="player in showdownPlayers"
+                :key="`showdown-player-${player.id}`"
+                class="summary-player"
+                :class="{ winner: player.isWinner }"
+              >
+                <div class="player-meta">
+                  <span class="player-name">{{ player.name }}</span>
+                  <span v-if="player.bestHand?.rankName" class="player-hand">{{ player.bestHand.rankName }}</span>
+                  <span v-else class="player-hand muted">Revealed</span>
+                </div>
+                <div class="player-cards">
+                  <div
+                    v-for="(card, cIndex) in player.cards"
+                    :key="`showdown-card-${player.id}-${cIndex}`"
+                    class="card-slot"
+                    :class="{ revealed: !!card?.rank }"
+                  >
+                    <span
+                      v-if="card?.rank"
+                      class="card-face"
+                      :class="getCardColor(card.suit)"
+                    >
+                      {{ card.suit }}{{ card.rank }}
+                    </span>
+                    <div v-else class="card-back small"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </transition>
 
         <div class="table-footer">
           <div v-if="gameStore.gamePhase === 'waiting'" class="footer-waiting">
@@ -1490,8 +1556,45 @@ onBeforeUnmount(() => {
 }
 
 .seat.active .seat-frame {
-  border-color: rgba(129, 140, 248, 0.65);
-  box-shadow: 0 18px 45px rgba(99, 102, 241, 0.35);
+  border-color: rgba(250, 204, 21, 0.85);
+  box-shadow: 0 20px 55px rgba(250, 204, 21, 0.35);
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.turn-indicator {
+  position: absolute;
+  left: -36px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #facc15;
+  font-size: 0.75rem;
+  pointer-events: none;
+  letter-spacing: 0.08em;
+}
+.turn-indicator .indicator-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #facc15;
+  box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.45);
+  animation: pulse-dot 1.4s ease-out infinite;
+}
+.turn-indicator .indicator-text {
+  font-weight: 600;
+}
+@keyframes pulse-dot {
+  0% {
+    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(250, 204, 21, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0);
+  }
 }
 
 .seat.folded {
@@ -1556,6 +1659,104 @@ onBeforeUnmount(() => {
   margin-top: 1.75rem;
 }
 
+.showdown-summary {
+  margin-top: 1.25rem;
+  padding: 1.25rem;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.35);
+}
+.showdown-summary .summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #f8fafc;
+  font-weight: 600;
+}
+.showdown-summary .summary-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.showdown-summary .summary-pot {
+  color: #facc15;
+  font-size: 0.95rem;
+}
+.showdown-summary .summary-board {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+.showdown-summary .summary-board .card-slot {
+  width: 52px;
+  height: 72px;
+}
+.showdown-summary .summary-board .card-face {
+  font-size: 0.92rem;
+}
+.showdown-summary .summary-players {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+}
+.showdown-summary .summary-player {
+  min-width: 160px;
+  padding: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(30, 41, 59, 0.65);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: center;
+  text-align: center;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.showdown-summary .summary-player.winner {
+  border-color: rgba(250, 204, 21, 0.7);
+  box-shadow: 0 12px 32px rgba(250, 204, 21, 0.25);
+}
+.showdown-summary .player-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: #e2e8f0;
+}
+.showdown-summary .player-hand {
+  font-size: 0.85rem;
+  color: rgba(148, 163, 184, 0.85);
+}
+.showdown-summary .player-hand.muted {
+  color: rgba(148, 163, 184, 0.55);
+}
+.showdown-summary .player-cards {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: center;
+}
+.showdown-summary .player-cards .card-slot {
+  width: 48px;
+  height: 64px;
+}
+.showdown-summary .player-cards .card-face {
+  font-size: 0.85rem;
+}
+.card-back.small {
+  border-radius: 8px;
+}
+.showdown-summary-enter-active,
+.showdown-summary-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.showdown-summary-enter-from,
+.showdown-summary-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
 .footer-waiting {
   display: flex;
   justify-content: center;
@@ -2057,6 +2258,10 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
+  .turn-indicator {
+    left: -24px;
+    font-size: 0.7rem;
+  }
   .game-screen {
     padding: 1rem;
   }
@@ -2204,6 +2409,11 @@ onBeforeUnmount(() => {
   opacity: 0;
 }
 </style>
+
+
+
+
+
 
 
 
