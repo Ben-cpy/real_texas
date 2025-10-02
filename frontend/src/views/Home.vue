@@ -8,9 +8,15 @@
             <p class="subtitle">专业的在线德州扑克游戏平台</p>
           </div>
           <div class="header-actions">
-            <div class="current-chips">
-              <span class="chips-label">当前筹码</span>
-              <span class="chips-value">${{ userStats.chips.toLocaleString() }}</span>
+            <div class="user-info-panel">
+              <div class="user-name">
+                <span class="name-label">Welcome,</span>
+                <span class="name-value">{{ userStore.username }}</span>
+              </div>
+              <div class="current-chips">
+                <span class="chips-label">当前筹码</span>
+                <span class="chips-value">${{ userStats.chips.toLocaleString() }}</span>
+              </div>
             </div>
             <button class="btn btn-logout" @click="handleLogout">Logout</button>
           </div>
@@ -80,9 +86,9 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const userStats = computed(() => ({
-  gamesPlayed: userStore.gamesPlayed,
-  winRate: userStore.winRate,
-  chips: userStore.chips
+  gamesPlayed: userStore.gamesPlayed || 0,
+  winRate: userStore.winRate || 0,
+  chips: userStore.chips || 0
 }))
 
 const createRoom = async () => {
@@ -193,24 +199,52 @@ onMounted(async () => {
   gap: 12px;
 }
 
+.user-info-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+  padding: 16px 24px;
+  border-radius: 16px;
+  border: 2px solid rgba(102, 126, 234, 0.3);
+}
+
+.user-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.name-label {
+  font-size: 0.75rem;
+  color: rgba(203, 213, 225, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.name-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
 .current-chips {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
-  padding: 12px 20px;
-  border-radius: 12px;
-  border: 2px solid rgba(102, 126, 234, 0.3);
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .chips-label {
-  font-size: 0.85rem;
-  color: #ccc;
-  margin-bottom: 4px;
+  font-size: 0.75rem;
+  color: rgba(203, 213, 225, 0.7);
 }
 
 .chips-value {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   -webkit-background-clip: text;

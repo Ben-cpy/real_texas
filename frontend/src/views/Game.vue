@@ -16,8 +16,11 @@
       </div>
 
       <div class="control-cluster">
-        <button class="btn icon-btn" @click="toggleSound" :aria-pressed="soundEnabled">
-          <span>{{ soundEnabled ? '??' : '??' }}</span>
+        <button class="btn icon-btn" @click="toggleSound" :aria-pressed="soundEnabled" title="Toggle Sound">
+          <span>{{ soundEnabled ? '🔊' : '🔇' }}</span>
+        </button>
+        <button class="btn icon-btn" @click="showHelp" title="Game Rules & Help">
+          <span>❓</span>
         </button>
         <button class="btn" @click="resetGame" v-if="gameStore.gamePhase !== 'waiting'">Restart</button>
         <button class="btn danger" @click="leaveGame">Leave</button>
@@ -42,6 +45,59 @@
         <div class="phase-banner-content">
           <h2>{{ phaseBannerText }}</h2>
           <p v-if="phaseBannerSubtext">{{ phaseBannerSubtext }}</p>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="modal">
+      <div v-if="showHelpDialog" class="modal-overlay" @click="closeHelp">
+        <div class="modal-content" @click.stop>
+          <button class="modal-close" @click="closeHelp">✕</button>
+          <h2>Texas Hold'em Rules</h2>
+          <div class="help-content">
+            <section>
+              <h3>🎯 Objective</h3>
+              <p>Create the best 5-card poker hand using your 2 hole cards and 5 community cards.</p>
+            </section>
+
+            <section>
+              <h3>🃏 Game Phases</h3>
+              <ul>
+                <li><strong>Pre-Flop:</strong> Each player gets 2 hole cards. First betting round.</li>
+                <li><strong>Flop:</strong> 3 community cards revealed. Second betting round.</li>
+                <li><strong>Turn:</strong> 4th community card revealed. Third betting round.</li>
+                <li><strong>River:</strong> 5th community card revealed. Final betting round.</li>
+                <li><strong>Showdown:</strong> Players reveal hands. Best hand wins the pot.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h3>🎴 Hand Rankings (Best to Worst)</h3>
+              <ol>
+                <li>Royal Flush</li>
+                <li>Straight Flush</li>
+                <li>Four of a Kind</li>
+                <li>Full House</li>
+                <li>Flush</li>
+                <li>Straight</li>
+                <li>Three of a Kind</li>
+                <li>Two Pair</li>
+                <li>One Pair</li>
+                <li>High Card</li>
+              </ol>
+            </section>
+
+            <section>
+              <h3>🎲 Actions</h3>
+              <ul>
+                <li><strong>Fold:</strong> Give up and forfeit the current hand</li>
+                <li><strong>Check:</strong> Pass action without betting (only if no bet to call)</li>
+                <li><strong>Call:</strong> Match the current bet</li>
+                <li><strong>Raise:</strong> Increase the current bet</li>
+                <li><strong>All-in:</strong> Bet all your chips</li>
+              </ul>
+            </section>
+          </div>
         </div>
       </div>
     </transition>
@@ -137,25 +193,28 @@
 
         <div class="table-footer">
           <div class="host-controls" v-if="gameStore.isRoomCreator">
-            <div class="seat-controls" v-if="gameStore.gamePhase === 'waiting'">
-              <button class="btn light" @click="decreaseSeats" :disabled="seatDecreaseDisabled">-</button>
-              <span>{{ gameStore.desiredSeatCount }} seats</span>
-              <button class="btn light" @click="increaseSeats" :disabled="seatIncreaseDisabled">+</button>
-            </div>
-            <div class="ai-controls" v-if="gameStore.gamePhase === 'waiting'">
-              <button class="btn success" @click="addAI" :disabled="gameStore.players.length >= gameStore.desiredSeatCount">
-                Add AI
+            <div class="host-label">You are the Host</div>
+            <div class="controls-row">
+              <div class="seat-controls" v-if="gameStore.gamePhase === 'waiting'">
+                <button class="btn light" @click="decreaseSeats" :disabled="seatDecreaseDisabled">-</button>
+                <span>{{ gameStore.desiredSeatCount }} seats</span>
+                <button class="btn light" @click="increaseSeats" :disabled="seatIncreaseDisabled">+</button>
+              </div>
+              <div class="ai-controls" v-if="gameStore.gamePhase === 'waiting'">
+                <button class="btn success" @click="addAI" :disabled="gameStore.players.length >= gameStore.desiredSeatCount">
+                  + Add AI
+                </button>
+                <button class="btn warning" @click="removeAI" :disabled="gameStore.aiPlayerCount === 0">
+                  - Remove AI
+                </button>
+              </div>
+              <button class="btn primary large" @click="startGame" :disabled="!gameStore.canStartGame">
+                {{ gameStore.gamePhase === 'waiting' ? 'Start Game' : 'Deal Next Hand' }}
               </button>
-              <button class="btn warning" @click="removeAI" :disabled="gameStore.aiPlayerCount === 0">
-                Remove AI
-              </button>
             </div>
-            <button class="btn primary" @click="startGame" :disabled="!gameStore.canStartGame">
-              {{ gameStore.gamePhase === 'waiting' ? 'Start Game' : 'Deal Next Hand' }}
-            </button>
           </div>
           <div class="waiting-banner" v-else-if="gameStore.gamePhase === 'waiting'">
-            Waiting for the host to start the game?
+            Waiting for the host to start the game...
           </div>
         </div>
       </section>
@@ -222,7 +281,7 @@
 
         <section class="chat-panel">
           <h3>Table Chat</h3>
-          <div class="chat-scroll">
+          <div class="chat-scroll" ref="chatScrollRef">
             <div
               v-for="(msg, index) in chatMessages"
               :key="`chat-${index}`"
@@ -271,10 +330,12 @@ const raiseAmount = ref(0)
 const gameLogs = ref([])
 const chatMessages = ref([])
 const chatInput = ref('')
+const chatScrollRef = ref(null)
 const soundEnabled = ref(soundService.enabled)
 const showPhaseBanner = ref(false)
 const phaseBannerText = ref('')
 const phaseBannerSubtext = ref('')
+const showHelpDialog = ref(false)
 
 const hasJoinedRoom = ref(false)
 const socketListeners = []
@@ -570,9 +631,25 @@ const sendChatMessage = () => {
   if (!chatInput.value || chatInput.value.trim().length === 0) {
     return
   }
-  socketService.sendChatMessage(chatInput.value.trim())
+  const message = chatInput.value.trim()
+  socketService.sendChatMessage(message)
   chatInput.value = ''
 }
+
+const scrollChatToBottom = () => {
+  if (chatScrollRef.value) {
+    setTimeout(() => {
+      chatScrollRef.value.scrollTop = chatScrollRef.value.scrollHeight
+    }, 50)
+  }
+}
+
+watch(
+  () => chatMessages.value.length,
+  () => {
+    scrollChatToBottom()
+  }
+)
 
 const toggleSound = () => {
   soundEnabled.value = !soundEnabled.value
@@ -580,6 +657,15 @@ const toggleSound = () => {
   if (soundEnabled.value) {
     soundService.playClick()
   }
+}
+
+const showHelp = () => {
+  soundService.playClick()
+  showHelpDialog.value = true
+}
+
+const closeHelp = () => {
+  showHelpDialog.value = false
 }
 
 const increaseSeats = () => {
@@ -1003,6 +1089,12 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+.btn.large {
+  padding: 0.65rem 2rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
 .phase-banner {
   position: fixed;
   top: 50%;
@@ -1295,8 +1387,29 @@ onBeforeUnmount(() => {
 
 .host-controls {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(99, 102, 241, 0.15);
+  padding: 1rem 1.5rem;
+  border-radius: 16px;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.host-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #818cf8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.controls-row {
+  display: flex;
   align-items: center;
   gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .seat-controls {
@@ -1537,5 +1650,132 @@ onBeforeUnmount(() => {
   .seat-3 { bottom: 16%; right: 6%; }
   .seat-4 { bottom: 8%; left: 50%; transform: translateX(-50%); }
   .seat-5 { bottom: 16%; left: 6%; }
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1.5rem;
+}
+
+.modal-content {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 24px;
+  padding: 2rem;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.6);
+  position: relative;
+}
+
+.modal-close {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(71, 85, 105, 0.5);
+  color: #e2e8f0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+  background: rgba(71, 85, 105, 0.8);
+  transform: scale(1.1);
+}
+
+.modal-content h2 {
+  margin: 0 0 1.5rem;
+  font-size: 1.75rem;
+  color: #f8fafc;
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.help-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.help-content section {
+  background: rgba(15, 23, 42, 0.4);
+  padding: 1.25rem;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.help-content h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.help-content p {
+  margin: 0;
+  color: rgba(203, 213, 225, 0.9);
+  line-height: 1.6;
+}
+
+.help-content ul,
+.help-content ol {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: rgba(203, 213, 225, 0.9);
+  line-height: 1.8;
+}
+
+.help-content li {
+  margin-bottom: 0.5rem;
+}
+
+.help-content strong {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-enter-active .modal-content,
+.modal-leave-active .modal-content {
+  transition: transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-from .modal-content {
+  transform: scale(0.9) translateY(20px);
+  opacity: 0;
+}
+
+.modal-leave-to .modal-content {
+  transform: scale(0.95) translateY(-10px);
+  opacity: 0;
 }
 </style>

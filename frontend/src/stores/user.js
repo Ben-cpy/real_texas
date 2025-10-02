@@ -16,8 +16,9 @@ export const useUserStore = defineStore('user', () => {
   const gamesPlayed = computed(() => user.value?.gamesPlayed || 0)
   const gamesWon = computed(() => user.value?.gamesWon || 0)
   const winRate = computed(() => {
-    if (!user.value || user.value.gamesPlayed === 0) return 0
-    return Math.round((user.value.gamesWon / user.value.gamesPlayed) * 100)
+    if (!user.value || !user.value.gamesPlayed || user.value.gamesPlayed === 0) return 0
+    const rate = (user.value.gamesWon / user.value.gamesPlayed) * 100
+    return isNaN(rate) ? 0 : Math.round(rate)
   })
 
   // Actions

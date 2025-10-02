@@ -340,7 +340,7 @@ npm run dev
 - ✅ **Sound System** - 15+ game sound effects, supports toggle and volume adjustment
 - ✅ **Achievement System** - 17 achievements, auto-unlock and chip rewards
 - ✅ **Unit Tests** - 40+ test cases covering game engine
-
+![alt text](image.png)
 ### ⏳ Optional Future Improvements
 - ⏳ Table animation optimization
 - ⏳ Daily task system
