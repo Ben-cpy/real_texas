@@ -20,7 +20,7 @@
           <span>{{ soundEnabled ? '馃攰' : '馃攪' }}</span>
         </button>
         <button class="btn icon-btn" @click="showHelp" title="Game Rules & Help">
-          <span>鉂?/span>
+          <span>❓</span>
         </button>
         <button class="btn" @click="resetGame" v-if="gameStore.gamePhase !== 'waiting'">Restart</button>
         <button class="btn danger" @click="leaveGame">Leave</button>
@@ -52,7 +52,7 @@
     <transition name="modal">
       <div v-if="showHelpDialog" class="modal-overlay" @click="closeHelp">
         <div class="modal-content" @click.stop>
-          <button class="modal-close" @click="closeHelp">鉁?/button>
+          <button class="modal-close" @click="closeHelp">✖</button>
           <h2>Texas Hold'em Rules</h2>
           <div class="help-content">
             <section>
@@ -496,9 +496,13 @@ const callAmount = computed(() => {
 const canCheck = computed(() => callAmount.value === 0)
 const canRaise = computed(() => gameStore.isMyTurn && (gameStore.myPlayer?.chips || 0) > 0)
 const canAddAI = computed(() => gameStore.gamePhase === 'waiting' && gameStore.players.length < maxSeatLimit.value)
-const canRemoveAI = computed(() =>\n  gameStore.gamePhase === 'waiting' &&\n  gameStore.aiPlayerCount > 0 &&\n  gameStore.players.length > MIN_SEAT_COUNT\n)
+const canRemoveAI = computed(() =>  gameStore.gamePhase === 'waiting' &&  gameStore.aiPlayerCount > 0 &&  gameStore.players.length > MIN_SEAT_COUNT)
 
-const maxRaiseValue = computed(() => Math.max(0, gameStore.myPlayer?.chips || 0))
+const maxRaiseValue = computed(() => {
+  const player = gameStore.myPlayer
+  if (!player) return 0
+  return Math.max(0, player.chips || 0)
+})
 
 const minRaiseValue = computed(() => {
   const chips = maxRaiseValue.value
@@ -573,7 +577,7 @@ watch(
   }
 )
 
-const getCardColor = (suit) => (suit === '鈾? || suit === '鈾? ? 'red' : 'black')
+const getCardColor = (suit) => (suit === '♥' || suit === '♦' ? 'red' : 'black')
 
 const formatPlayerAction = (action) => {
   const key = typeof action === 'string' ? action : action?.action || action?.type
@@ -804,13 +808,19 @@ const joinCurrentRoom = () => {
   }
 }
 
-const ensureAuthenticated = () => {
+const ensureAuthenticated = async () => {
   if (!userStore.token) {
     return
   }
   const status = socketService.getStatus()
   if (!status.connected) {
-    socketService.connect()
+    try {
+      await socketService.connect()
+      socketService.authenticate(userStore.token)
+    } catch (error) {
+      console.error('Failed to connect socket:', error)
+      ElMessage.error('Failed to connect to game server')
+    }
     return
   }
   if (!status.authenticated) {
@@ -908,7 +918,7 @@ const setupSocketListeners = () => {
           soundService.playLose()
         }
       } else {
-        addLog('Hand finished. Preparing next hand鈥?)
+        addLog('Hand finished. Preparing next hand…')
       }
     },
     player_joined: (data) => {
@@ -976,9 +986,9 @@ const setupSocketListeners = () => {
   })
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (!userStore.isLoggedIn) {
-    userStore.initFromStorage()
+    await userStore.initFromStorage()
   }
 
   if (!userStore.isLoggedIn) {
@@ -991,7 +1001,7 @@ onMounted(() => {
 
   gameStore.initSocket()
   setupSocketListeners()
-  ensureAuthenticated()
+  await ensureAuthenticated()
 })
 
 onBeforeUnmount(() => {

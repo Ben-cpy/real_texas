@@ -13,22 +13,35 @@ class SocketService {
 
   /**
    * Initialize socket connection
+   * @returns {Promise} Resolves when connected
    */
   connect() {
     if (this.socket && this.isConnected) {
       console.log('Socket already connected')
-      return
+      return Promise.resolve()
     }
 
-    this.socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      timeout: 10000
-    })
+    return new Promise((resolve, reject) => {
+      this.socket = io(SOCKET_URL, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        timeout: 10000
+      })
 
-    this.setupConnectionHandlers()
+      this.setupConnectionHandlers()
+
+      // Resolve when connected
+      this.socket.once('connect', () => {
+        resolve()
+      })
+
+      // Reject on connection error
+      this.socket.once('connect_error', (error) => {
+        reject(error)
+      })
+    })
   }
 
   /**

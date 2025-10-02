@@ -1,4 +1,4 @@
-﻿import jwt from 'jsonwebtoken'
+import jwt from 'jsonwebtoken'
 import { User } from '../models/User.js'
 import { GameRoom } from '../models/GameRoom.js'
 import { PokerGame } from '../services/PokerGame.js'
@@ -185,7 +185,7 @@ export const handleSocketConnection = (socket, io) => {
       const { token } = data
       const decoded = jwt.verify(token, process.env.JWT_SECRET)
       const user = await User.findById(decoded.userId)
-      
+
       if (!user) {
         socket.emit('auth_error', { error: 'User does not exist' })
         return
@@ -193,7 +193,7 @@ export const handleSocketConnection = (socket, io) => {
 
       socket.userId = user.id
       socket.username = user.username
-      socket.emit('authenticated', { 
+      socket.emit('authenticated', {
         user: {
           id: user.id,
           username: user.username,
@@ -219,7 +219,7 @@ export const handleSocketConnection = (socket, io) => {
 
       const { roomId } = data
       let room = await GameRoom.findById(roomId)
-      
+
       if (!room) {
         // If room doesn't exist, create default room
         try {
@@ -271,7 +271,7 @@ export const handleSocketConnection = (socket, io) => {
       })
 
       if (!success) {
-        socket.emit('error', { error: '鏃犳硶鍔犲叆鎴块棿' })
+        socket.emit('error', { error: 'Unable to join room' })
         return
       }
 
@@ -280,7 +280,7 @@ export const handleSocketConnection = (socket, io) => {
 
       if (realPlayers.length === 1 && realPlayers[0].id === user.id) {
         await GameRoom.updateCreator(roomId, user.id)
-        console.log(`鏇存柊鎴块棿 ${roomId} 鐨勬埧涓讳负: ${user.username}`)
+        console.log(`Updated room ${roomId} host to: ${user.username}`)
       }
 
       if (isSinglePlayerRoom && typeof game.setDesiredSeatCount === 'function' && !game.gameStarted) {
@@ -308,20 +308,20 @@ export const handleSocketConnection = (socket, io) => {
 
       broadcastPlayerList(io, roomId, game)
 
-      console.log(`鐜╁ ${user.username} 鍔犲叆鎴块棿 ${roomId}`)
+      console.log(`Player ${user.username} joined room ${roomId}`)
 
     } catch (error) {
-      console.error('鍔犲叆鎴块棿閿欒:', error)
-      socket.emit('error', { error: '鍔犲叆鎴块棿澶辫触' })
+      console.error('Join room error:', error)
+      socket.emit('error', { error: 'Failed to join room' })
     }
   })
 
-  // 绂诲紑鎴块棿
+  // Leave room
   socket.on('leave_room', async () => {
     await handleLeaveRoom(socket, io)
   })
 
-  // 娓告垙鎿嶄綔
+  // Game action
   socket.on('game_action', async (data) => {
     try {
       if (!socket.userId || !socket.currentRoomId) {
@@ -339,23 +339,23 @@ export const handleSocketConnection = (socket, io) => {
       const result = game.handlePlayerAction(socket.userId, action, amount)
 
       if (result.success) {
-        // 骞挎挱娓告垙鐘舵€佹洿鏂?
+        // Broadcast game state update
         io.to(socket.currentRoomId).emit('game_update', {
           gameState: game.getGameState(),
           lastAction: result.action
         })
 
-        // 鏇存柊鏁版嵁搴撲腑鐨勬父鎴忕姸鎬?
+        // Update game state in database
         await GameRoom.updateGameState(socket.currentRoomId, game.getGameState())
 
-        // 澶勭悊AI琛屽姩锛堝欢杩?绉掕鐢ㄦ埛鐪嬪埌杩囩▼锛?
-        console.log('鍑嗗澶勭悊AI琛屽姩...')
+        // Process AI actions (1 second delay to let users see the process)
+        console.log('Preparing to process AI actions...')
         setTimeout(async () => {
-          console.log('寮€濮嬪鐞咥I琛屽姩')
+          console.log('Starting AI action processing')
           await processAIActions(game, socket.currentRoomId, io)
         }, 1000)
 
-        // 妫€鏌ユ父鎴忔槸鍚︾粨鏉?
+        // Check if game is finished
         if (game.isGameFinished()) {
           await handleGameFinish(game, socket.currentRoomId, io)
         }
@@ -364,12 +364,12 @@ export const handleSocketConnection = (socket, io) => {
       }
 
     } catch (error) {
-      console.error('娓告垙鎿嶄綔閿欒:', error)
-      socket.emit('error', { error: '鎿嶄綔澶辫触' })
+      console.error('Game action error:', error)
+      socket.emit('error', { error: 'Action failed' })
     }
   })
 
-  // 寮€濮嬫父鎴?
+  // Start game
   socket.on('start_game', async () => {
     try {
       if (!socket.userId || !socket.currentRoomId) {
@@ -385,34 +385,34 @@ export const handleSocketConnection = (socket, io) => {
 
       const room = await GameRoom.findById(socket.currentRoomId)
       if (room.creator_id !== socket.userId) {
-        socket.emit('error', { error: '鍙湁鎴夸富鍙互寮€濮嬫父鎴? })
+        socket.emit('error', { error: 'Only the host can start the game' })
         return
       }
 
       const result = game.startGame()
       if (result.success) {
-        // 鏇存柊鎴块棿鐘舵€?
+        // Update room status
         await GameRoom.updateStatus(socket.currentRoomId, 'playing')
-        
-        // 骞挎挱娓告垙寮€濮?
+
+        // Broadcast game started
         io.to(socket.currentRoomId).emit('game_started', {
           gameState: game.getGameState()
         })
 
         await processAIActions(game, socket.currentRoomId, io)
 
-        console.log(`娓告垙寮€濮? 鎴块棿 ${socket.currentRoomId}`)
+        console.log(`Game started in room ${socket.currentRoomId}`)
       } else {
         socket.emit('error', { error: result.error })
       }
 
     } catch (error) {
-      console.error('寮€濮嬫父鎴忛敊璇?', error)
-      socket.emit('error', { error: '寮€濮嬫父鎴忓け璐? })
+      console.error('Start game error:', error)
+      socket.emit('error', { error: 'Failed to start game' })
     }
   })
 
-  // 閲嶅紑娓告垙
+  // Reset game
   socket.on('reset_game', async () => {
     try {
       if (!socket.userId || !socket.currentRoomId) {
@@ -426,7 +426,7 @@ export const handleSocketConnection = (socket, io) => {
         return
       }
 
-      // 閲嶇疆娓告垙鐘舵€?
+      // Reset game state
       game.gameStarted = false
       game.gameFinished = false
       game.phase = 'waiting'
@@ -436,7 +436,7 @@ export const handleSocketConnection = (socket, io) => {
       game.communityCards = []
       game.actionHistory = []
 
-      // 閲嶇疆鐜╁鐘舵€?
+      // Reset player state
       game.players.forEach(player => {
         player.cards = []
         player.currentBet = 0
@@ -446,21 +446,21 @@ export const handleSocketConnection = (socket, io) => {
         player.active = player.chips > 0
       })
 
-      // 鏇存柊鎴块棿鐘舵€?
+      // Update room status
       await GameRoom.updateStatus(socket.currentRoomId, 'waiting')
       await GameRoom.updateGameState(socket.currentRoomId, game.getGameState())
 
-      // 骞挎挱娓告垙閲嶅紑
+      // Broadcast game reset
       io.to(socket.currentRoomId).emit('game_reset', {
         gameState: game.getGameState(),
-        message: '娓告垙宸查噸寮€'
+        message: 'Game has been reset'
       })
 
-      console.log(`娓告垙閲嶅紑: 鎴块棿 ${socket.currentRoomId}`)
+      console.log(`Game reset in room ${socket.currentRoomId}`)
 
     } catch (error) {
-      console.error('閲嶅紑娓告垙閿欒:', error)
-      socket.emit('error', { error: '閲嶅紑娓告垙澶辫触' })
+      console.error('Reset game error:', error)
+      socket.emit('error', { error: 'Failed to reset game' })
     }
   })
 
@@ -471,29 +471,29 @@ export const handleSocketConnection = (socket, io) => {
     )
     const updated = await updateSeatCount(socket, io, () => requested)
     if (updated !== null) {
-      console.log(`鎴块棿 ${socket.currentRoomId} 璋冩暣鐩爣搴т綅鏁拌嚦 ${updated} (璇锋眰: ${requested})`)
+      console.log(`Room ${socket.currentRoomId} adjusted target seat count to ${updated} (requested: ${requested})`)
     }
   })
 
   socket.on('add_ai', async () => {
     const result = await adjustAIPlayers(socket, io, 1)
     if (result !== null) {
-      console.log(`鎴块棿 ${socket.currentRoomId} 娣诲姞 AI锛屽綋鍓嶇帺瀹舵暟 ${result}`)
+      console.log(`Room ${socket.currentRoomId} added AI, current player count: ${result}`)
     }
   })
 
   socket.on('remove_ai', async () => {
     const result = await adjustAIPlayers(socket, io, -1)
     if (result !== null) {
-      console.log(`鎴块棿 ${socket.currentRoomId} 绉婚櫎 AI锛屽綋鍓嶇帺瀹舵暟 ${result}`)
+      console.log(`Room ${socket.currentRoomId} removed AI, current player count: ${result}`)
     }
   })
 
-  // 鑱婂ぉ娑堟伅
+  // Chat message
   socket.on('send_chat_message', async (data) => {
     try {
       if (!socket.userId || !socket.currentRoomId) {
-        socket.emit('error', { error: '璇峰厛鍔犲叆鎴块棿' })
+        socket.emit('error', { error: 'Please join a room first' })
         return
       }
 
@@ -502,10 +502,10 @@ export const handleSocketConnection = (socket, io) => {
         return
       }
 
-      // 娑堟伅闀垮害闄愬埗
+      // Message length limit
       const trimmedMessage = message.trim().substring(0, 200)
 
-      // 骞挎挱鑱婂ぉ娑堟伅鍒版埧闂村唴鎵€鏈夌帺瀹?
+      // Broadcast chat message to all players in room
       io.to(socket.currentRoomId).emit('chat_message', {
         userId: socket.userId,
         username: socket.username,
@@ -513,22 +513,22 @@ export const handleSocketConnection = (socket, io) => {
         timestamp: Date.now()
       })
 
-      console.log(`鑱婂ぉ娑堟伅 [${socket.currentRoomId}] ${socket.username}: ${trimmedMessage}`)
+      console.log(`Chat message [${socket.currentRoomId}] ${socket.username}: ${trimmedMessage}`)
 
     } catch (error) {
-      console.error('鍙戦€佽亰澶╂秷鎭敊璇?', error)
-      socket.emit('error', { error: '鍙戦€佹秷鎭け璐? })
+      console.error('Send chat message error:', error)
+      socket.emit('error', { error: 'Failed to send message' })
     }
   })
 
-  // 鏂紑杩炴帴
+  // Disconnect
   socket.on('disconnect', async () => {
-    console.log(`Socket鏂紑杩炴帴: ${socket.id}`)
+    console.log(`Socket disconnected: ${socket.id}`)
     await handleLeaveRoom(socket, io)
   })
 }
 
-// 澶勭悊鐜╁绂诲紑鎴块棿
+// Handle player leaving room
 const handleLeaveRoom = async (socket, io) => {
   if (!socket.currentRoomId || !socket.userId) {
     return
@@ -553,7 +553,7 @@ const handleLeaveRoom = async (socket, io) => {
       await GameRoom.updateGameState(roomId, null)
       await GameRoom.updateStatus(roomId, 'waiting')
       broadcastPlayerList(io, roomId, null)
-      console.log(`鎴块棿 ${roomId} 宸叉竻鐞哷)
+      console.log(`Room ${roomId} has been cleared`)
     } else {
       if (!game.gameStarted && typeof game.syncAIPlayers === 'function') {
         game.syncAIPlayers()
@@ -574,28 +574,28 @@ const handleLeaveRoom = async (socket, io) => {
 
   socket.leave(roomId)
   socket.currentRoomId = null
-  console.log(`鐜╁ ${socket.username} 绂诲紑鎴块棿 ${roomId}`)
+  console.log(`Player ${socket.username} left room ${roomId}`)
 }
 
 
-// 澶勭悊AI杩炵画琛屽姩
+// Process consecutive AI actions
 const processAIActions = async (game, roomId, io) => {
   try {
     const playerCount = typeof game.getPlayers === 'function' ? game.getPlayers().length : (game.players?.length || 0)
-    const maxAIActions = Math.max(60, playerCount * 12) // 闃叉鏃犻檺寰幆锛屽苟纭繚瓒冲鐨凙I琛屽姩娆℃暟
+    const maxAIActions = Math.max(60, playerCount * 12) // Prevent infinite loops and ensure sufficient AI action attempts
     let aiActionCount = 0
 
     while (aiActionCount < maxAIActions) {
       const aiResult = game.processAIAction()
 
       if (!aiResult) {
-        // 娌℃湁AI闇€瑕佽鍔紝鎴栬€呮父鎴忕粨鏉?
+        // No AI needs to act, or game is finished
         break
       }
 
       aiActionCount++
 
-      // 骞挎挱AI琛屽姩
+      // Broadcast AI action
       if (aiResult.actionSummary) {
         io.to(roomId).emit('ai_action', aiResult.actionSummary)
       } else {
@@ -607,7 +607,7 @@ const processAIActions = async (game, roomId, io) => {
         })
       }
 
-      // 骞挎挱娓告垙鐘舵€佹洿鏂?
+      // Broadcast game state update
       io.to(roomId).emit('game_update', {
         gameState: aiResult.gameState,
         lastAction: aiResult.actionSummary || {
@@ -621,13 +621,13 @@ const processAIActions = async (game, roomId, io) => {
         }
       })
 
-      // 鏇存柊鏁版嵁搴撲腑鐨勬父鎴忕姸鎬?
+      // Update game state in database
       await GameRoom.updateGameState(roomId, aiResult.gameState)
 
-      // AI琛屽姩闂撮殧 - 5绉掑欢杩熻鐜╁鑳藉鐪嬫竻AI鐨勬搷浣?
+      // AI action interval - 5 second delay to let players see AI actions clearly
       await new Promise(resolve => setTimeout(resolve, 5000))
-      
-      // 妫€鏌ユ父鎴忔槸鍚︾粨鏉?
+
+      // Check if game is finished
       if (game.isGameFinished()) {
         await handleGameFinish(game, roomId, io)
         break
@@ -639,17 +639,17 @@ const processAIActions = async (game, roomId, io) => {
     }
 
   } catch (error) {
-    console.error('AI琛屽姩澶勭悊閿欒:', error)
+    console.error('AI action processing error:', error)
   }
 }
 
-// 澶勭悊娓告垙缁撴潫
+// Handle game finish
 const handleGameFinish = async (game, roomId, io) => {
   try {
     const results = game.getGameResults()
 
     if (!results) {
-      console.warn(`鎴块棿 ${roomId} 鐨勬父鎴忕粨鏋滀负绌猴紝鏃犳硶缁撶畻`)
+      console.warn(`Game results for room ${roomId} are empty, cannot settle`)
       return
     }
 
@@ -721,7 +721,7 @@ const handleGameFinish = async (game, roomId, io) => {
       })
     }
 
-    console.log(`娓告垙缁撴潫: 鎴块棿 ${roomId}, 鑾疯儨鑰?${results.winner.name}`)
+    console.log(`Game finished in room ${roomId}, winner: ${results.winner.name}`)
 
     setTimeout(async () => {
       try {
@@ -770,12 +770,12 @@ const handleGameFinish = async (game, roomId, io) => {
           })
         }
       } catch (error) {
-        console.error('鍑嗗涓嬩竴灞€鏃跺嚭閿?', error)
+        console.error('Error preparing next hand:', error)
       }
     }, 2500)
 
   } catch (error) {
-    console.error('澶勭悊娓告垙缁撴潫閿欒:', error)
+    console.error('Handle game finish error:', error)
   }
 }
 

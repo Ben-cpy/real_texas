@@ -26,7 +26,7 @@ export const useUserStore = defineStore('user', () => {
   /**
    * Initialize user from localStorage
    */
-  function initFromStorage() {
+  async function initFromStorage() {
     const storedToken = localStorage.getItem('token')
     const storedUser = localStorage.getItem('user')
 
@@ -34,6 +34,14 @@ export const useUserStore = defineStore('user', () => {
       token.value = storedToken
       user.value = JSON.parse(storedUser)
       isLoggedIn.value = true
+
+      // Connect socket and authenticate
+      try {
+        await socketService.connect()
+        socketService.authenticate(storedToken)
+      } catch (error) {
+        console.error('Failed to connect socket on init:', error)
+      }
 
       // Verify token is still valid
       verifyToken()
@@ -60,8 +68,12 @@ export const useUserStore = defineStore('user', () => {
       localStorage.setItem('user', JSON.stringify(response.user))
 
       // Connect socket and authenticate
-      socketService.connect()
-      socketService.authenticate(response.token)
+      try {
+        await socketService.connect()
+        socketService.authenticate(response.token)
+      } catch (socketError) {
+        console.error('Failed to connect socket on login:', socketError)
+      }
 
       return { success: true, message: response.message }
     } catch (error) {
@@ -92,8 +104,12 @@ export const useUserStore = defineStore('user', () => {
       localStorage.setItem('user', JSON.stringify(response.user))
 
       // Connect socket and authenticate
-      socketService.connect()
-      socketService.authenticate(response.token)
+      try {
+        await socketService.connect()
+        socketService.authenticate(response.token)
+      } catch (socketError) {
+        console.error('Failed to connect socket on register:', socketError)
+      }
 
       return { success: true, message: response.message }
     } catch (error) {

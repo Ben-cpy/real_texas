@@ -115,21 +115,20 @@ const startQuickGame = async () => {
 
     const response = await api.createRoom({
       name: roomName,
-      maxPlayers: 4,
+      maxPlayers: 10,
       smallBlind: 10,
       bigBlind: 20
     })
 
     const roomId = response?.room?.id
     if (!roomId) {
-      throw new Error('未获取到房间 ID')
+      throw new Error('Failed to get room ID')
     }
 
-    await api.joinRoom(roomId)
-
+    // Navigate to game - socket will handle joining
     router.push(`/game?roomId=${roomId}`)
   } catch (error) {
-    const message = error?.response?.data?.error || error.message || '创建快速游戏失败'
+    const message = error?.response?.data?.error || error.message || 'Failed to create quick game'
     ElMessage.error(message)
   } finally {
     isCreatingQuickGame.value = false
@@ -175,18 +174,12 @@ const joinRoom = async () => {
     })
 
     if (roomId) {
-      try {
-        await api.joinRoom(roomId)
-        ElMessage.success(`正在加入房间...`)
-
-        // Navigate to game room
-        router.push(`/game?roomId=${roomId}`)
-      } catch (error) {
-        ElMessage.error(error.response?.data?.error || '加入房间失败')
-      }
+      // Navigate to game - socket will handle joining
+      ElMessage.success(`Joining room...`)
+      router.push(`/game?roomId=${roomId}`)
     }
   } catch {
-    // 用户取消
+    // User cancelled
   }
 }
 
