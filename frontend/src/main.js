@@ -5,11 +5,16 @@ import 'element-plus/dist/index.css'
 import router from './router'
 import App from './App.vue'
 import './assets/styles/main.css'
+import { useUserStore } from './stores/user'
 
 const app = createApp(App)
 const pinia = createPinia()
 
 app.use(pinia)
+
+const userStore = useUserStore()
+userStore.initFromStorage()
+
 app.use(router)
 app.use(ElementPlus)
 

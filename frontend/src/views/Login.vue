@@ -23,13 +23,17 @@
               prefix-icon="Lock"
               show-password
             />
-          </el-form-item>
-          
-          <el-form-item>
-            <el-button
-              type="primary"
-              size="large"
-              style="width: 100%"
+        </el-form-item>
+
+        <el-form-item class="options-row">
+          <el-checkbox v-model="rememberCredentials">记住账号和密码</el-checkbox>
+        </el-form-item>
+
+        <el-form-item>
+          <el-button
+            type="primary"
+            size="large"
+            style="width: 100%"
               :loading="loading"
               @click="handleLogin"
             >
@@ -83,7 +87,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
@@ -97,6 +101,37 @@ const registerLoading = ref(false)
 const showRegister = ref(false)
 const loginFormRef = ref()
 const registerFormRef = ref()
+const rememberCredentials = ref(localStorage.getItem('rememberCredentials') !== 'false')
+
+const savedCredentialsKey = 'loginSavedCredentials'
+
+const encodeCredential = (value) => {
+  try {
+    const encoder = new TextEncoder()
+    const bytes = encoder.encode(value || '')
+    let binary = ''
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte)
+    })
+    return btoa(binary)
+  } catch (error) {
+    console.warn('Failed to encode credentials', error)
+    return ''
+  }
+}
+
+const decodeCredential = (value) => {
+  try {
+    if (!value) return ''
+    const binary = atob(value)
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+    const decoder = new TextDecoder()
+    return decoder.decode(bytes)
+  } catch (error) {
+    console.warn('Failed to decode credentials', error)
+    return ''
+  }
+}
 
 const loginForm = reactive({
   username: '',
@@ -146,7 +181,7 @@ const registerRules = {
 
 const handleLogin = async () => {
   if (!loginFormRef.value) return
-  
+
   await loginFormRef.value.validate((valid) => {
     if (valid) {
       login()
@@ -161,6 +196,16 @@ const login = async () => {
     const result = await userStore.login(loginForm.username, loginForm.password)
 
     if (result.success) {
+      if (rememberCredentials.value) {
+        const payload = {
+          username: loginForm.username,
+          password: encodeCredential(loginForm.password)
+        }
+        localStorage.setItem(savedCredentialsKey, JSON.stringify(payload))
+      } else {
+        localStorage.removeItem(savedCredentialsKey)
+      }
+
       ElMessage.success(result.message || '登录成功！')
       router.push('/')
     } else {
@@ -204,6 +249,39 @@ const register = async () => {
     registerLoading.value = false
   }
 }
+
+const hydrateSavedCredentials = () => {
+  if (!rememberCredentials.value) {
+    return
+  }
+
+  const raw = localStorage.getItem(savedCredentialsKey)
+  if (!raw) return
+
+  try {
+    const saved = JSON.parse(raw)
+    loginForm.username = saved.username || ''
+    if (saved.password) {
+      const decoded = decodeCredential(saved.password)
+      loginForm.password = decoded
+    }
+  } catch (error) {
+    console.warn('Failed to restore saved credentials', error)
+  }
+}
+
+onMounted(() => {
+  hydrateSavedCredentials()
+})
+
+watch(rememberCredentials, (value) => {
+  localStorage.setItem('rememberCredentials', value ? 'true' : 'false')
+  if (!value) {
+    localStorage.removeItem(savedCredentialsKey)
+  } else {
+    hydrateSavedCredentials()
+  }
+})
 </script>
 
 <style scoped>
@@ -239,6 +317,14 @@ const register = async () => {
 
 .login-form {
   margin-bottom: 20px;
+}
+
+.options-row {
+  margin-bottom: 10px;
+}
+
+.options-row :deep(.el-form-item__content) {
+  justify-content: flex-start;
 }
 
 .login-footer {
