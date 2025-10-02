@@ -180,14 +180,16 @@
 
     <main class="content">
       <section class="table-area">
-        <div class="table-felt">
-          <div class="table-glow"></div>
-
+        <div class="table-summary">
           <div class="pot-info" aria-live="polite">
             <span class="label">Pot</span>
             <span class="value">${{ gameStore.totalPot }}</span>
             <span class="call" v-if="callAmount > 0">To call ${{ callAmount }}</span>
           </div>
+        </div>
+
+        <div class="table-felt">
+          <div class="table-glow"></div>
 
           <div class="community-row">
             <div
@@ -203,6 +205,7 @@
               >
                 {{ card.suit }}{{ card.rank }}
               </span>
+              <div v-else class="card-back"></div>
             </div>
           </div>
 
@@ -255,23 +258,6 @@
                   </div>
                   <div class="bet-stack" v-if="seat.player.currentBet > 0 && !seat.player.folded">
                     Bet ${{ seat.player.currentBet }}
-                  </div>
-                </div>
-                <div class="hole-cards">
-                  <div
-                    v-for="n in 2"
-                    :key="`hole-${seat.player.id}-${n}`"
-                    class="card-slot"
-                    :class="{ revealed: shouldRevealPlayerCard(seat.player, n - 1) }"
-                  >
-                    <span
-                      v-if="shouldRevealPlayerCard(seat.player, n - 1)"
-                      class="card-face"
-                      :class="getCardColor(seat.player.cards[n - 1]?.suit)"
-                    >
-                      {{ seat.player.cards[n - 1]?.suit }}{{ seat.player.cards[n - 1]?.rank }}
-                    </span>
-                    <div v-else class="card-back"></div>
                   </div>
                 </div>
               </div>
@@ -508,7 +494,7 @@ const cleanupSocketListeners = () => {
   socketListeners.length = 0
 }
 
-const opponentSeatClasses = [
+const defaultSeatOrder = [
   'seat-bottom-right',
   'seat-right-lower',
   'seat-right-upper',
@@ -519,6 +505,42 @@ const opponentSeatClasses = [
   'seat-left-lower',
   'seat-bottom-left'
 ]
+
+const seatPairs = [
+  ['seat-left-upper', 'seat-right-upper'],
+  ['seat-left-lower', 'seat-right-lower'],
+  ['seat-top-left', 'seat-top-right'],
+  ['seat-bottom-left', 'seat-bottom-right']
+]
+
+const buildSymmetricSeatLayout = (count) => {
+  if (count <= 0) return []
+  if (count > defaultSeatOrder.length) {
+    return defaultSeatOrder
+  }
+
+  const layout = []
+  if (count % 2 === 1) {
+    layout.push('seat-top-center')
+  }
+
+  for (const pair of seatPairs) {
+    if (layout.length >= count) break
+    layout.push(pair[0])
+    if (layout.length >= count) break
+    layout.push(pair[1])
+  }
+
+  if (layout.length < count) {
+    const fallback = defaultSeatOrder.filter((seat) => !layout.includes(seat))
+    for (const seat of fallback) {
+      if (layout.length >= count) break
+      layout.push(seat)
+    }
+  }
+
+  return layout.slice(0, count)
+}
 
 const userId = computed(() => userStore.user?.id ?? null)
 const myPlayer = computed(() => gameStore.myPlayer ?? null)
@@ -535,6 +557,7 @@ const opponentSeats = computed(() => {
   const myIndex = players.findIndex((player) => player.id === userId.value)
   const assignments = []
   const total = players.length
+  const layout = buildSymmetricSeatLayout(Math.max(total - (myIndex === -1 ? 0 : 1), 0))
   let seatCursor = 0
 
   for (let offset = 0; offset < total; offset++) {
@@ -544,7 +567,7 @@ const opponentSeats = computed(() => {
       continue
     }
 
-    const seatClass = opponentSeatClasses[seatCursor % opponentSeatClasses.length]
+    const seatClass = layout[seatCursor] || defaultSeatOrder[seatCursor % defaultSeatOrder.length]
     assignments.push({ player, seatClass, orderIndex: seatCursor })
     seatCursor += 1
   }
@@ -1480,12 +1503,20 @@ onBeforeUnmount(() => {
   gap: 1.5rem;
 }
 
+
 .table-area {
   flex: 2.3;
   display: flex;
   flex-direction: column;
   gap: 1rem;
   align-items: center;
+}
+
+.table-summary {
+  width: 100%;
+  max-width: 980px;
+  display: flex;
+  justify-content: center;
 }
 
 .table-felt {
@@ -1497,7 +1528,7 @@ onBeforeUnmount(() => {
   background: radial-gradient(circle at center, rgba(30, 64, 175, 0.18), rgba(15, 23, 42, 0.92));
   border: 2px solid rgba(148, 163, 184, 0.22);
   box-shadow: inset 0 0 60px rgba(15, 23, 42, 0.9), 0 25px 55px rgba(15, 23, 42, 0.5);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .table-glow {
@@ -1521,16 +1552,13 @@ onBeforeUnmount(() => {
 }
 
 .pot-info {
-  position: absolute;
-  top: 6%;
-  left: 8%;
-  transform: none;
+  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
+  align-items: center;
+  text-align: center;
   gap: 0.35rem;
-  padding: 0.7rem 1.15rem;
+  padding: 0.7rem 1.4rem;
   min-width: 210px;
   background: rgba(15, 23, 42, 0.78);
   border-radius: 16px;
@@ -1644,49 +1672,49 @@ onBeforeUnmount(() => {
 }
 
 .dealer-chip.seat-bottom-right {
-  bottom: 22%;
-  right: 18%;
-}
-
-.dealer-chip.seat-right-lower {
-  bottom: 38%;
-  right: 10%;
-}
-
-.dealer-chip.seat-right-upper {
-  top: 38%;
-  right: 10%;
-}
-
-.dealer-chip.seat-top-right {
-  top: 22%;
+  bottom: 20%;
   right: 20%;
 }
 
-.dealer-chip.seat-top-center {
+.dealer-chip.seat-right-lower {
+  bottom: 34%;
+  right: 12%;
+}
+
+.dealer-chip.seat-right-upper {
+  top: 34%;
+  right: 12%;
+}
+
+.dealer-chip.seat-top-right {
   top: 18%;
+  right: 22%;
+}
+
+.dealer-chip.seat-top-center {
+  top: 14%;
   left: 50%;
   transform: translateX(-50%);
 }
 
 .dealer-chip.seat-top-left {
-  top: 22%;
-  left: 20%;
+  top: 18%;
+  left: 22%;
 }
 
 .dealer-chip.seat-left-upper {
-  top: 38%;
-  left: 10%;
+  top: 34%;
+  left: 12%;
 }
 
 .dealer-chip.seat-left-lower {
-  bottom: 38%;
-  left: 10%;
+  bottom: 34%;
+  left: 12%;
 }
 
 .dealer-chip.seat-bottom-left {
-  bottom: 22%;
-  left: 18%;
+  bottom: 20%;
+  left: 20%;
 }
 
 .player-layer {
@@ -1842,15 +1870,15 @@ onBeforeUnmount(() => {
   border-color: rgba(250, 204, 21, 0.6);
 }
 
-.seat-bottom-right { bottom: 12%; right: 14%; }
-.seat-right-lower { bottom: 28%; right: 6%; }
-.seat-right-upper { top: 28%; right: 6%; }
-.seat-top-right { top: 12%; right: 16%; }
-.seat-top-center { top: 6%; left: 50%; transform: translateX(-50%); }
-.seat-top-left { top: 12%; left: 16%; }
-.seat-left-upper { top: 28%; left: 6%; }
-.seat-left-lower { bottom: 28%; left: 6%; }
-.seat-bottom-left { bottom: 12%; left: 14%; }
+.seat-bottom-right { bottom: 10%; right: 16%; }
+.seat-right-lower { bottom: 26%; right: 8%; }
+.seat-right-upper { top: 26%; right: 8%; }
+.seat-top-right { top: 10%; right: 20%; }
+.seat-top-center { top: 4%; left: 50%; transform: translateX(-50%); }
+.seat-top-left { top: 10%; left: 20%; }
+.seat-left-upper { top: 26%; left: 8%; }
+.seat-left-lower { bottom: 26%; left: 8%; }
+.seat-bottom-left { bottom: 10%; left: 16%; }
 
 .my-seat {
   bottom: 6%;
@@ -1870,9 +1898,9 @@ onBeforeUnmount(() => {
 }
 
 .dealer-chip.my-seat {
-  bottom: 26%;
+  bottom: -10%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, 0);
 }
 
 .empty-state {
@@ -2606,15 +2634,15 @@ onBeforeUnmount(() => {
   .seat {
     width: 150px;
   }
-  .seat-bottom-right { bottom: 10%; right: 8%; }
-  .seat-right-lower { bottom: 28%; right: 4%; }
-  .seat-right-upper { top: 26%; right: 4%; }
-  .seat-top-right { top: 10%; right: 12%; }
+  .seat-bottom-right { bottom: 10%; right: 12%; }
+  .seat-right-lower { bottom: 26%; right: 6%; }
+  .seat-right-upper { top: 26%; right: 6%; }
+  .seat-top-right { top: 10%; right: 16%; }
   .seat-top-center { top: 4%; left: 50%; transform: translateX(-50%); }
-  .seat-top-left { top: 10%; left: 12%; }
-  .seat-left-upper { top: 26%; left: 4%; }
-  .seat-left-lower { bottom: 28%; left: 4%; }
-  .seat-bottom-left { bottom: 10%; left: 8%; }
+  .seat-top-left { top: 10%; left: 16%; }
+  .seat-left-upper { top: 26%; left: 6%; }
+  .seat-left-lower { bottom: 26%; left: 6%; }
+  .seat-bottom-left { bottom: 10%; left: 12%; }
 }
 
 .modal-overlay {
