@@ -1394,5 +1394,78 @@ export class PokerGame {
   getPlayerCount() {
     return this.players.length
   }
+
+  getSerializableState() {
+    return {
+      roomId: this.roomId,
+      smallBlind: this.smallBlind,
+      bigBlind: this.bigBlind,
+      maxPlayers: this.maxPlayers,
+      desiredSeatCount: this.desiredSeatCount,
+      players: this.players.map(p => ({
+        ...p,
+        cards: p.cards.map(c => ({ suit: c.suit, rank: c.rank })),
+        bestHand: p.bestHand ? {
+            ...p.bestHand,
+            cards: p.bestHand.cards.map(c => ({ suit: c.suit, rank: c.rank }))
+        } : null
+      })),
+      deck: {
+        cards: this.deck.cards.map(c => ({ suit: c.suit, rank: c.rank })),
+      },
+      communityCards: this.communityCards.map(c => ({ suit: c.suit, rank: c.rank })),
+      pot: this.pot,
+      currentBet: this.currentBet,
+      minimumRaiseAmount: this.minimumRaiseAmount,
+      currentPlayerIndex: this.currentPlayerIndex,
+      dealerIndex: this.dealerIndex,
+      phase: this.phase,
+      gameStarted: this.gameStarted,
+      gameFinished: this.gameFinished,
+      lastAction: this.lastAction,
+      smallBlindIndex: this.smallBlindIndex,
+      bigBlindIndex: this.bigBlindIndex,
+      actionHistory: this.actionHistory,
+      latestResults: this.latestResults,
+      singlePlayerMode: this.singlePlayerMode,
+    };
+  }
+
+  static fromSerializableState(state) {
+    const game = new PokerGame(state.roomId, {
+      smallBlind: state.smallBlind,
+      bigBlind: state.bigBlind,
+      maxPlayers: state.maxPlayers,
+      desiredSeatCount: state.desiredSeatCount,
+    });
+
+    game.players = state.players.map(p => ({
+      ...p,
+      cards: p.cards.map(c => new Card(c.suit, c.rank)),
+      bestHand: p.bestHand ? {
+          ...p.bestHand,
+          cards: p.bestHand.cards.map(c => new Card(c.suit, c.rank))
+      } : null,
+    }));
+    game.deck = new Deck();
+    game.deck.cards = state.deck.cards.map(c => new Card(c.suit, c.rank));
+    game.communityCards = state.communityCards.map(c => new Card(c.suit, c.rank));
+    game.pot = state.pot;
+    game.currentBet = state.currentBet;
+    game.minimumRaiseAmount = state.minimumRaiseAmount;
+    game.currentPlayerIndex = state.currentPlayerIndex;
+    game.dealerIndex = state.dealerIndex;
+    game.phase = state.phase;
+    game.gameStarted = state.gameStarted;
+    game.gameFinished = state.gameFinished;
+    game.lastAction = state.lastAction;
+    game.smallBlindIndex = state.smallBlindIndex;
+    game.bigBlindIndex = state.bigBlindIndex;
+    game.actionHistory = state.actionHistory;
+    game.latestResults = state.latestResults;
+    game.singlePlayerMode = state.singlePlayerMode;
+
+    return game;
+  }
 }
 
