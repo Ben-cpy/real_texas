@@ -532,7 +532,7 @@ Handles real-time Socket.IO communication for multiplayer gameplay.
 - `join_room` - Join a game room
 - `leave_room` - Leave current room
 - `game_action` - Player game action (fold/call/raise/etc)
-- `start_game` - Start the game (host only)
+- `start_game` - Start the game (host only). Can be used to start the first hand or manually trigger the next hand after a game is finished.
 - `reset_game` - Reset game to waiting state
 - `set_ai_count` - Set total player count (adjusts AI)
 - `add_ai` - Add one AI player
@@ -558,12 +558,12 @@ Handles real-time Socket.IO communication for multiplayer gameplay.
 - `game` (PokerGame): Game instance
 - `roomId` (String): Room ID
 - `io` (SocketIO.Server): Socket.IO server instance
-**Note:** Uses 5-second delays between AI actions for better UX
+**Note:** Uses 1-second delays between AI actions for better UX
 
 ---
 
 #### `handleGameFinish(game, roomId, io)`
-**Purpose:** Handle game completion (update stats, achievements, auto-start next hand)
+**Purpose:** Handle game completion (update stats, achievements). The game enters a finished state and waits for the host to manually start the next hand.
 **Location:** `backend/src/socket/gameSocket.js:640`
 **Parameters:**
 - `game` (PokerGame): Game instance
