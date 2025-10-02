@@ -227,7 +227,9 @@
                 {
                   active: seat.player.id === currentTurnPlayerId,
                   folded: seat.player.folded,
-                  allin: seat.player.allIn
+                  allin: seat.player.allIn,
+                  'human-player': !seat.player.isAI,
+                  'ai-player': seat.player.isAI
                 }
               ]"
             >
@@ -297,108 +299,109 @@
             </div>
           </div>
 
-          <div v-else-if="myPlayer" class="player-panel">
-            <div class="panel-header">
-              <div class="identity">
-                <span class="label">You</span>
-                <h3>{{ myPlayer.name }}</h3>
-              </div>
-              <div class="chip-summary">
-                <span class="stack">Stack ${{ myPlayer.chips }}</span>
-                <span v-if="myPlayer.currentBet > 0" class="bet">In pot ${{ myPlayer.currentBet }}</span>
-                <span
-                  v-if="gameStore.isMyTurn && callAmount > 0"
-                  class="call-highlight"
-                >
-                  To call ${{ callAmount }}
-                </span>
-                <span v-else-if="gameStore.isMyTurn" class="call-highlight ready">
-                  Your turn
-                </span>
-                <span v-if="myPlayer.folded" class="fold-flag" aria-hidden="true">
-                  ⛔ Folded
-                </span>
-              </div>
-            </div>
-            <div class="panel-body">
-              <div class="panel-cards">
-                <div
-                  v-for="n in 2"
-                  :key="`panel-card-${n}`"
-                  class="player-card"
-                  :class="{ revealed: shouldRevealPlayerCard(myPlayer, n - 1) }"
-                >
-                  <div
-                    v-if="shouldRevealPlayerCard(myPlayer, n - 1)"
-                    class="card-face large"
-                    :class="getCardColor(myPlayer.cards[n - 1]?.suit)"
+          <div v-else-if="myPlayer" class="player-footer-row">
+            <div class="player-panel">
+              <div class="panel-header">
+                <div class="identity">
+                  <span class="label">You</span>
+                  <h3>{{ myPlayer.name }}</h3>
+                </div>
+                <div class="chip-summary">
+                  <span class="stack">Stack ${{ myPlayer.chips }}</span>
+                  <span v-if="myPlayer.currentBet > 0" class="bet">In pot ${{ myPlayer.currentBet }}</span>
+                  <span
+                    v-if="gameStore.isMyTurn && callAmount > 0"
+                    class="call-highlight"
                   >
-                    {{ myPlayer.cards[n - 1]?.suit }}{{ myPlayer.cards[n - 1]?.rank }}
-                  </div>
-                  <div v-else class="card-back large"></div>
+                    To call ${{ callAmount }}
+                  </span>
+                  <span v-else-if="gameStore.isMyTurn" class="call-highlight ready">
+                    Your turn
+                  </span>
+                  <span v-if="myPlayer.folded" class="fold-flag" aria-hidden="true">
+                    ⛔ Folded
+                  </span>
                 </div>
               </div>
-              <div class="panel-status">
-                <div
-                  class="status-line"
-                  :class="getActionClass(myPlayer.lastAction)"
-                  v-if="myPlayer.lastAction"
-                >
-                  {{ formatPlayerAction(myPlayer.lastAction) }}
+              <div class="panel-body">
+                <div class="panel-cards">
+                  <div
+                    v-for="n in 2"
+                    :key="`panel-card-${n}`"
+                    class="player-card"
+                    :class="{ revealed: shouldRevealPlayerCard(myPlayer, n - 1) }"
+                  >
+                    <div
+                      v-if="shouldRevealPlayerCard(myPlayer, n - 1)"
+                      class="card-face large"
+                      :class="getCardColor(myPlayer.cards[n - 1]?.suit)"
+                    >
+                      {{ myPlayer.cards[n - 1]?.suit }}{{ myPlayer.cards[n - 1]?.rank }}
+                    </div>
+                    <div v-else class="card-back large"></div>
+                  </div>
                 </div>
-                <div class="status-line" v-else>
-                  Waiting for action
-                </div>
-                <div class="status-line" v-if="myPlayer.bestHand && myPlayer.bestHand.rankName">
-                  Best hand: {{ myPlayer.bestHand.rankName }}
+                <div class="panel-status">
+                  <div
+                    class="status-line"
+                    :class="getActionClass(myPlayer.lastAction)"
+                    v-if="myPlayer.lastAction"
+                  >
+                    {{ formatPlayerAction(myPlayer.lastAction) }}
+                  </div>
+                  <div class="status-line" v-else>
+                    Waiting for action
+                  </div>
+                  <div class="status-line" v-if="myPlayer.bestHand && myPlayer.bestHand.rankName">
+                    Best hand: {{ myPlayer.bestHand.rankName }}
+                  </div>
                 </div>
               </div>
             </div>
+            <section class="player-actions" :class="{ inactive: !gameStore.isMyTurn }">
+              <h3>Actions</h3>
+              <div class="action-buttons">
+                <button class="btn ghost" @click="fold" :disabled="!gameStore.isMyTurn">Fold</button>
+                <button class="btn ghost" @click="checkOrCall" :disabled="!gameStore.isMyTurn">
+                  {{ canCheck ? 'Check' : `Call $${callAmount}` }}
+                </button>
+                <button class="btn primary" @click="openRaisePanel" :disabled="!canRaise">
+                  Raise
+                </button>
+                <button class="btn danger" @click="allIn" :disabled="!gameStore.isMyTurn">All-in</button>
+              </div>
+
+              <transition name="raise-panel">
+                <div v-if="showRaisePanel" class="raise-panel">
+                  <header>
+                    <span>Raise Amount</span>
+                    <button class="icon-btn" @click="closeRaisePanel">✕</button>
+                  </header>
+                  <div class="slider-row">
+                    <input
+                      type="range"
+                      :min="Math.min(minRaiseValue, maxRaiseValue)"
+                      :max="maxRaiseValue"
+                      :step="RAISE_STEP"
+                      v-model.number="raiseAmount"
+                    />
+                    <div class="slider-value">${{ raiseAmount }}</div>
+                  </div>
+                  <div class="quick-raise">
+                    <button class="btn light" @click="setRaiseFraction(0.25)">+25%</button>
+                    <button class="btn light" @click="setRaiseFraction(0.5)">+50%</button>
+                    <button class="btn light" @click="setRaiseFraction(1)">Pot</button>
+                    <button class="btn light" @click="setRaiseAllIn">All-in</button>
+                  </div>
+                  <button class="btn primary full" @click="confirmRaise">Confirm Raise</button>
+                </div>
+              </transition>
+            </section>
           </div>
         </div>
       </section>
 
       <aside class="sidebar">
-        <section class="action-panel" :class="{ inactive: !gameStore.isMyTurn }">
-          <h3>Actions</h3>
-          <div class="action-buttons">
-            <button class="btn ghost" @click="fold" :disabled="!gameStore.isMyTurn">Fold</button>
-            <button class="btn ghost" @click="checkOrCall" :disabled="!gameStore.isMyTurn">
-              {{ canCheck ? 'Check' : `Call $${callAmount}` }}
-            </button>
-            <button class="btn primary" @click="openRaisePanel" :disabled="!canRaise">
-              Raise
-            </button>
-            <button class="btn danger" @click="allIn" :disabled="!gameStore.isMyTurn">All-in</button>
-          </div>
-
-          <transition name="raise-panel">
-            <div v-if="showRaisePanel" class="raise-panel">
-              <header>
-                <span>Raise Amount</span>
-                <button class="icon-btn" @click="closeRaisePanel">?</button>
-              </header>
-              <div class="slider-row">
-                <input
-                  type="range"
-                  :min="Math.min(minRaiseValue, maxRaiseValue)"
-                  :max="maxRaiseValue"
-                  step="1"
-                  v-model.number="raiseAmount"
-                />
-                <div class="slider-value">${{ raiseAmount }}</div>
-              </div>
-              <div class="quick-raise">
-                <button class="btn light" @click="setRaiseFraction(0.25)">+25%</button>
-                <button class="btn light" @click="setRaiseFraction(0.5)">+50%</button>
-                <button class="btn light" @click="setRaiseFraction(1)">Pot</button>
-                <button class="btn light" @click="setRaiseAllIn">All-in</button>
-              </div>
-              <button class="btn primary full" @click="confirmRaise">Confirm Raise</button>
-            </div>
-          </transition>
-        </section>
-
         <section class="info-panel">
           <h3>Table Snapshot</h3>
           <ul>
@@ -411,7 +414,7 @@
 
         <section class="log-panel">
           <h3>Game Log</h3>
-          <div class="log-scroll">
+          <div class="log-scroll" ref="logScrollRef">
             <div v-for="(entry, index) in gameLogs" :key="`log-${index}`" class="log-entry">
               {{ entry }}
             </div>
@@ -447,7 +450,7 @@
   </div>
 </template>
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/user'
@@ -465,6 +468,7 @@ const displayRoomId = computed(() => gameStore.roomId || roomIdParam.value || 'N
 
 const FALLBACK_MAX_SEATS = 10
 const MIN_SEAT_COUNT = 4
+const RAISE_STEP = 100
 
 const showRaisePanel = ref(false)
 const raiseAmount = ref(0)
@@ -472,6 +476,7 @@ const gameLogs = ref([])
 const chatMessages = ref([])
 const chatInput = ref('')
 const chatScrollRef = ref(null)
+const logScrollRef = ref(null)
 const soundEnabled = ref(soundService.enabled)
 const showPhaseBanner = ref(false)
 const phaseBannerText = ref('')
@@ -578,8 +583,9 @@ const dealerSeatClass = computed(() => {
   const dealer = players[dealerIndex.value]
   if (!dealer) return null
 
+  // Don't show dealer button for current user
   if (dealer.id === userId.value) {
-    return 'my-seat'
+    return null
   }
 
   const seat = opponentSeats.value.find((entry) => entry.player.id === dealer.id)
@@ -736,6 +742,21 @@ const phaseDescription = computed(() => phaseDescriptions[gameStore.gamePhase] |
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
 
+const alignRaiseAmount = (value, min, max) => {
+  if (max <= min) {
+    return clamp(value, min, max)
+  }
+  const bounded = clamp(value, min, max)
+  if (bounded === max || bounded === min) {
+    return bounded
+  }
+  const steps = Math.round((bounded - min) / RAISE_STEP)
+  let normalized = min + steps * RAISE_STEP
+  if (normalized < min) normalized = min
+  if (normalized > max) normalized = max
+  return normalized
+}
+
 watch(showRaisePanel, (visible) => {
   if (visible) {
     const chips = maxRaiseValue.value
@@ -743,8 +764,8 @@ watch(showRaisePanel, (visible) => {
       raiseAmount.value = 0
       return
     }
-    const base = Math.min(minRaiseValue.value || chips, chips)
-    raiseAmount.value = base || chips
+    const min = Math.min(minRaiseValue.value || chips, chips)
+    raiseAmount.value = alignRaiseAmount(min || chips, min || 1, chips)
   }
 })
 
@@ -767,7 +788,7 @@ watch(
       return
     }
     const min = Math.min(minRaiseValue.value || chips, chips)
-    raiseAmount.value = clamp(raiseAmount.value || min, min || 1, chips)
+    raiseAmount.value = alignRaiseAmount(raiseAmount.value || min, min || 1, chips)
   }
 )
 
@@ -821,10 +842,11 @@ const shouldRevealPlayerCard = (player, index) => {
 
 const addLog = (message) => {
   const timestamp = new Date().toLocaleTimeString()
-  gameLogs.value.unshift(`[${timestamp}] ${message}`)
+  gameLogs.value.push(`[${timestamp}] ${message}`)
   if (gameLogs.value.length > 80) {
-    gameLogs.value.pop()
+    gameLogs.value.shift()
   }
+  scrollLogsToBottom()
 }
 
 const fold = () => {
@@ -856,8 +878,8 @@ const openRaisePanel = () => {
     raiseAmount.value = 0
     return
   }
-  const base = Math.min(minRaiseValue.value || chips, chips)
-  raiseAmount.value = base || chips
+  const min = Math.min(minRaiseValue.value || chips, chips)
+  raiseAmount.value = alignRaiseAmount(min || chips, min || 1, chips)
 }
 
 const closeRaisePanel = () => {
@@ -869,9 +891,9 @@ const setRaiseFraction = (fraction) => {
   if (chips <= 0) return
   const call = callAmount.value
   const additional = Math.max(chips - call, 0) * fraction
-  const target = Math.round(call + additional)
+  const target = call + additional
   const min = Math.min(minRaiseValue.value || chips, chips)
-  raiseAmount.value = clamp(target || min, min || 1, chips)
+  raiseAmount.value = alignRaiseAmount(target || min, min || 1, chips)
 }
 
 const setRaiseAllIn = () => {
@@ -887,7 +909,7 @@ const confirmRaise = () => {
     return
   }
   const min = Math.min(minRaiseValue.value || chips, chips)
-  const amount = Math.round(clamp(raiseAmount.value || min, min || 1, chips))
+  const amount = alignRaiseAmount(raiseAmount.value || min, min || 1, chips)
   if (amount < callAmount.value && amount < chips) {
     soundService.playError()
     ElMessage.error('Raise amount is too small')
@@ -973,6 +995,15 @@ const scrollChatToBottom = () => {
   }
 }
 
+const scrollLogsToBottom = () => {
+  if (!logScrollRef.value) return
+  nextTick(() => {
+    if (logScrollRef.value) {
+      logScrollRef.value.scrollTop = logScrollRef.value.scrollHeight
+    }
+  })
+}
+
 watch(
   () => gameStore.gamePhase,
   (phase, previous) => {
@@ -985,6 +1016,13 @@ watch(
   () => chatMessages.value.length,
   () => {
     scrollChatToBottom()
+  }
+)
+
+watch(
+  () => gameLogs.value.length,
+  () => {
+    scrollLogsToBottom()
   }
 )
 
@@ -1202,6 +1240,7 @@ const setupSocketListeners = () => {
 }
 
 onMounted(async () => {
+  scrollLogsToBottom()
   if (!userStore.isLoggedIn) {
     await userStore.initFromStorage()
   }
@@ -1512,7 +1551,7 @@ onBeforeUnmount(() => {
 
 .table-summary {
   width: 100%;
-  max-width: 980px;
+  max-width: 1080px;
   display: flex;
   justify-content: center;
 }
@@ -1520,7 +1559,7 @@ onBeforeUnmount(() => {
 .table-felt {
   position: relative;
   width: 100%;
-  max-width: 980px;
+  max-width: 1080px;
   aspect-ratio: 16 / 9;
   border-radius: 220px;
   background: radial-gradient(circle at center, rgba(30, 64, 175, 0.18), rgba(15, 23, 42, 0.92));
@@ -1740,6 +1779,29 @@ onBeforeUnmount(() => {
   box-shadow: 0 12px 25px rgba(15, 23, 42, 0.5);
 }
 
+.seat.human-player .seat-frame {
+  background: rgba(22, 163, 74, 0.28);
+  border-color: rgba(74, 222, 128, 0.45);
+  box-shadow: 0 18px 32px rgba(22, 163, 74, 0.35);
+}
+
+.seat.human-player .seat-frame::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 22px;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  box-shadow: 0 0 18px rgba(74, 222, 128, 0.35);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.seat.ai-player .seat-frame {
+  background: rgba(79, 70, 229, 0.22);
+  border-color: rgba(129, 140, 248, 0.35);
+  box-shadow: 0 18px 32px rgba(79, 70, 229, 0.25);
+}
+
 .seat-header {
   display: flex;
   justify-content: space-between;
@@ -1916,10 +1978,26 @@ onBeforeUnmount(() => {
 
 .table-footer {
   width: 100%;
+  max-width: 1080px;
+  align-self: flex-start;
   display: flex;
-  justify-content: center;
-  align-items: stretch;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 1.5rem;
   margin-top: 1.75rem;
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.player-footer-row {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  justify-content: flex-start;
+  align-items: flex-end;
 }
 
 .showdown-overlay {
@@ -2071,7 +2149,8 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.player-panel {
+.player-panel,
+.player-actions {
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -2080,8 +2159,26 @@ onBeforeUnmount(() => {
   border-radius: 20px;
   border: 1px solid rgba(148, 163, 184, 0.3);
   box-shadow: 0 24px 45px rgba(15, 23, 42, 0.48);
-  min-width: 360px;
-  max-width: 520px;
+}
+
+.player-panel {
+  flex: 1 1 420px;
+  min-width: 320px;
+}
+
+.player-actions {
+  flex: 1 1 320px;
+  min-width: 280px;
+  gap: 1.2rem;
+  justify-content: flex-end;
+}
+
+.player-actions h3 {
+  margin: 0;
+}
+
+.player-actions.inactive {
+  opacity: 0.55;
 }
 
 .panel-header {
@@ -2317,7 +2414,7 @@ onBeforeUnmount(() => {
   min-width: 260px;
   display: grid;
   gap: 1rem;
-  grid-template-rows: min-content min-content 1fr 1fr;
+  grid-template-rows: min-content minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .sidebar section {
@@ -2434,10 +2531,6 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
-}
-
-.action-panel.inactive {
-  opacity: 0.55;
 }
 
 .action-buttons {
