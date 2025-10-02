@@ -82,7 +82,7 @@ const updateSeatCount = async (socket, io, computeDesired) => {
   const result = game.setDesiredSeatCount(desiredSeatCount)
 
   await GameRoom.updatePlayers(roomId, game.getPlayers())
-  await GameRoom.updateGameState(roomId, game.getGameState())
+  await GameRoom.updateGameState(roomId, game.getSerializableState())
 
   socket.emit('ai_count_updated', {
     desiredSeatCount: result.desiredSeatCount,
@@ -160,7 +160,7 @@ const adjustAIPlayers = async (socket, io, delta) => {
   const gameState = game.getGameState()
 
   await GameRoom.updatePlayers(roomId, game.getPlayers())
-  await GameRoom.updateGameState(roomId, gameState)
+  await GameRoom.updateGameState(roomId, game.getSerializableState())
 
   socket.emit('ai_count_updated', {
     desiredSeatCount: game.desiredSeatCount,
@@ -249,22 +249,47 @@ export const handleSocketConnection = (socket, io) => {
       // Get or create game instance
       let game = activeRooms.get(roomId)
       if (!game) {
-        game = new PokerGame(roomId, {
-          smallBlind: room.small_blind,
-          bigBlind: room.big_blind,
-          maxPlayers: room.max_players,
-          desiredSeatCount: isSinglePlayerRoom
-            ? initialSeatTarget
-            : Math.max(MIN_SEAT_COUNT, initialSeatTarget)
-        })
-        game.singlePlayerMode = isSinglePlayerRoom
+        // If game is not in memory, try to load from database
+        if (room.game_state) {
+          try {
+            const savedState = JSON.parse(room.game_state)
+            if (savedState) {
+              game = PokerGame.fromSerializableState(savedState)
+              console.log(`Reconstructed game ${roomId} from database state.`)
+            }
+          } catch (e) {
+            console.error(`Failed to parse or reconstruct game state for room ${roomId}:`, e)
+            // If reconstruction fails, we'll create a new game instance below
+          }
+        }
+
+        // If game still doesn't exist (not in memory, no valid state in DB), create a new one
+        if (!game) {
+          game = new PokerGame(roomId, {
+            smallBlind: room.small_blind,
+            bigBlind: room.big_blind,
+            maxPlayers: room.max_players,
+            desiredSeatCount: isSinglePlayerRoom
+              ? initialSeatTarget
+              : Math.max(MIN_SEAT_COUNT, initialSeatTarget)
+          })
+          game.singlePlayerMode = isSinglePlayerRoom
+          console.log(`Created new game instance for room ${roomId}`)
+        }
         activeRooms.set(roomId, game)
       } else if (isSinglePlayerRoom) {
         game.singlePlayerMode = true
       }
 
-      // Add player to game
       const user = await User.findById(socket.userId)
+
+      // Check if room is full before adding player
+      if (game.getPlayerCount() >= game.maxPlayers) {
+        socket.emit('error', { error: 'Room is full' })
+        return
+      }
+
+      // Add player to game
       const success = game.addPlayer({
         id: user.id,
         name: user.username,
@@ -273,7 +298,7 @@ export const handleSocketConnection = (socket, io) => {
       })
 
       if (!success) {
-        socket.emit('error', { error: 'Unable to join room' })
+        socket.emit('error', { error: 'Unable to join room. You might already be in it.' })
         return
       }
 
@@ -293,7 +318,7 @@ export const handleSocketConnection = (socket, io) => {
       socket.currentRoomId = roomId
 
       await GameRoom.updatePlayers(roomId, game.getPlayers())
-      await GameRoom.updateGameState(roomId, game.getGameState())
+      await GameRoom.updateGameState(roomId, game.getSerializableState())
 
       const updatedRoom = await GameRoom.findById(roomId)
 
@@ -310,7 +335,7 @@ export const handleSocketConnection = (socket, io) => {
 
       broadcastPlayerList(io, roomId, game)
 
-      console.log(`Player ${user.username} joined room ${roomId}`)
+      console.log(`Player ${user.username} (Socket: ${socket.id}) joined room ${roomId}`)
 
     } catch (error) {
       console.error('Join room error:', error)
@@ -348,7 +373,7 @@ export const handleSocketConnection = (socket, io) => {
         })
 
         // Update game state in database
-        await GameRoom.updateGameState(socket.currentRoomId, game.getGameState())
+        await GameRoom.updateGameState(socket.currentRoomId, game.getSerializableState())
 
         // Process AI actions (1 second delay to let users see the process)
         console.log('Preparing to process AI actions...')
@@ -406,11 +431,11 @@ export const handleSocketConnection = (socket, io) => {
         if (!nextHand.success) {
           await GameRoom.updateStatus(socket.currentRoomId, 'waiting')
           await GameRoom.updatePlayers(socket.currentRoomId, game.getPlayers())
-          const waitingState = game.getGameState()
+          const waitingState = game.getSerializableState()
           await GameRoom.updateGameState(socket.currentRoomId, waitingState)
           broadcastPlayerList(io, socket.currentRoomId, game)
           io.to(socket.currentRoomId).emit('game_update', {
-            gameState: waitingState,
+            gameState: game.getGameState(),
             lastAction: null,
             message: nextHand.error
           })
@@ -426,7 +451,7 @@ export const handleSocketConnection = (socket, io) => {
 
       await GameRoom.updateStatus(socket.currentRoomId, 'playing')
       await GameRoom.updatePlayers(socket.currentRoomId, game.getPlayers())
-      await GameRoom.updateGameState(socket.currentRoomId, gameState)
+      await GameRoom.updateGameState(socket.currentRoomId, game.getSerializableState())
 
       io.to(socket.currentRoomId).emit('game_started', {
         gameState
@@ -483,7 +508,7 @@ export const handleSocketConnection = (socket, io) => {
 
       // Update room status
       await GameRoom.updateStatus(socket.currentRoomId, 'waiting')
-      await GameRoom.updateGameState(socket.currentRoomId, game.getGameState())
+      await GameRoom.updateGameState(socket.currentRoomId, game.getSerializableState())
 
       // Broadcast game reset
       io.to(socket.currentRoomId).emit('game_reset', {
@@ -595,7 +620,7 @@ const handleLeaveRoom = async (socket, io) => {
       }
 
       await GameRoom.updatePlayers(roomId, game.getPlayers())
-      await GameRoom.updateGameState(roomId, game.getGameState())
+      await GameRoom.updateGameState(roomId, game.getSerializableState())
 
       io.to(roomId).emit('player_left', {
         playerId: socket.userId,
@@ -657,7 +682,7 @@ const processAIActions = async (game, roomId, io) => {
       })
 
       // Update game state in database
-      await GameRoom.updateGameState(roomId, aiResult.gameState)
+      await GameRoom.updateGameState(roomId, game.getSerializableState())
 
       // AI action interval delay to let players see AI actions clearly
       await new Promise(resolve => setTimeout(resolve, AI_ACTION_DELAY_MS))
@@ -731,7 +756,7 @@ const handleGameFinish = async (game, roomId, io) => {
 
     await GameRoom.updateStatus(roomId, 'finished')
     await GameRoom.updatePlayers(roomId, game.getPlayers())
-    await GameRoom.updateGameState(roomId, finalState)
+    await GameRoom.updateGameState(roomId, game.getSerializableState())
 
     io.to(roomId).emit('game_finished', {
       results,
