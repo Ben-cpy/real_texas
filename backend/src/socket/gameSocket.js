@@ -16,6 +16,7 @@ const broadcastPlayerList = (io, roomId, game) => {
     io.to(roomId).emit('player_list_updated', {
       players: [],
       desiredSeatCount: 0,
+      maxPlayers: 0,
       phase: 'waiting'
     })
     return
@@ -25,6 +26,7 @@ const broadcastPlayerList = (io, roomId, game) => {
   io.to(roomId).emit('player_list_updated', {
     players: gameState.players,
     desiredSeatCount: game.desiredSeatCount || gameState.players.length,
+    maxPlayers: game.maxPlayers,
     phase: gameState.phase
   })
 }
@@ -77,11 +79,96 @@ const updateSeatCount = async (socket, io, computeDesired) => {
   await GameRoom.updateGameState(roomId, game.getGameState())
 
   socket.emit('ai_count_updated', {
-    desiredSeatCount: result.desiredSeatCount
+    desiredSeatCount: result.desiredSeatCount,
+    maxPlayers: game.maxPlayers
   })
   broadcastPlayerList(io, roomId, game)
 
   return result.desiredSeatCount
+}
+
+const adjustAIPlayers = async (socket, io, delta) => {
+  if (!socket.userId || !socket.currentRoomId) {
+    socket.emit('error', { error: 'Invalid game state' })
+    return null
+  }
+
+  if (delta === 0) {
+    return null
+  }
+
+  const roomId = socket.currentRoomId
+  const game = activeRooms.get(roomId)
+
+  if (!game) {
+    socket.emit('error', { error: 'Game does not exist' })
+    return null
+  }
+
+  if (game.gameStarted) {
+    socket.emit('error', { error: 'Cannot adjust AI while game is in progress' })
+    return null
+  }
+
+  const room = await GameRoom.findById(roomId)
+  if (room.creator_id !== socket.userId) {
+    socket.emit('error', { error: 'Only the room host can manage AI players' })
+    return null
+  }
+
+  let changed = false
+
+  if (delta > 0) {
+    const capacity = game.maxPlayers || game.players.length
+    if (game.players.length >= capacity) {
+      socket.emit('error', { error: 'Table is already full' })
+      return null
+    }
+    changed = game.addAIPlayer()
+  } else {
+    changed = game.removeAIPlayer()
+    if (!changed) {
+      socket.emit('error', { error: 'No AI players to remove' })
+      return null
+    }
+  }
+
+  if (!changed) {
+    socket.emit('error', { error: 'Unable to adjust AI players' })
+    return null
+  }
+
+  const realPlayers = typeof game.countRealPlayers === 'function'
+    ? game.countRealPlayers()
+    : game.getPlayers().filter(player => !player.isAI).length
+
+  const currentPlayers = game.getPlayers().length
+  const capacity = game.maxPlayers || currentPlayers
+
+  game.desiredSeatCount = Math.max(realPlayers, Math.min(capacity, currentPlayers))
+
+  if (!game.gameStarted && typeof game.syncAIPlayers === 'function') {
+    game.syncAIPlayers()
+  }
+
+  const gameState = game.getGameState()
+
+  await GameRoom.updatePlayers(roomId, game.getPlayers())
+  await GameRoom.updateGameState(roomId, gameState)
+
+  socket.emit('ai_count_updated', {
+    desiredSeatCount: game.desiredSeatCount,
+    maxPlayers: game.maxPlayers
+  })
+
+  broadcastPlayerList(io, roomId, game)
+
+  io.to(roomId).emit('game_update', {
+    gameState,
+    lastAction: null
+  })
+
+  return currentPlayers
 }
 
 
@@ -382,16 +469,16 @@ export const handleSocketConnection = (socket, io) => {
   })
 
   socket.on('add_ai', async () => {
-    const updated = await updateSeatCount(socket, io, (current) => current + 1)
-    if (updated !== null) {
-      console.log(`房间 ${socket.currentRoomId} 手动添加 AI，目标座位数 ${updated}`)
+    const result = await adjustAIPlayers(socket, io, 1)
+    if (result !== null) {
+      console.log(`房间 ${socket.currentRoomId} 添加 AI，当前玩家数 ${result}`)
     }
   })
 
   socket.on('remove_ai', async () => {
-    const updated = await updateSeatCount(socket, io, (current) => current - 1)
-    if (updated !== null) {
-      console.log(`房间 ${socket.currentRoomId} 移除 AI，目标座位数 ${updated}`)
+    const result = await adjustAIPlayers(socket, io, -1)
+    if (result !== null) {
+      console.log(`房间 ${socket.currentRoomId} 移除 AI，当前玩家数 ${result}`)
     }
   })
 

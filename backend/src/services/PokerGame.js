@@ -355,8 +355,12 @@ export class PokerGame {
 
   setDesiredSeatCount(count) {
     const realPlayers = this.countRealPlayers()
-    const sanitized = Math.max(realPlayers, Math.max(3, Math.min(this.maxPlayers, count)))
+    const sanitized = Math.max(realPlayers, Math.min(this.maxPlayers, Math.max(1, count)))
     this.desiredSeatCount = sanitized
+
+    if (!this.gameStarted) {
+      this.syncAIPlayers()
+    }
 
     return {
       success: true,
@@ -369,11 +373,9 @@ export class PokerGame {
       return
     }
 
-    if (!this.singlePlayerMode) {
-      return
-    }
-
-    const target = this.desiredSeatCount
+    const minimum = this.countRealPlayers()
+    const desired = this.desiredSeatCount || this.players.length
+    const target = Math.max(Math.min(this.maxPlayers, Math.max(1, desired)), minimum)
 
     while (this.players.length < target) {
       if (!this.addAIPlayer()) {
@@ -1353,6 +1355,7 @@ export class PokerGame {
       minRaise: this.minimumRaiseAmount,
       currentPlayerIndex: this.currentPlayerIndex,
       dealerIndex: this.dealerIndex,
+      maxPlayers: this.maxPlayers,
       communityCards: this.communityCards.map((card) => ({
         suit: card.suit,
         rank: card.rank,

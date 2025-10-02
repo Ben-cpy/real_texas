@@ -4,9 +4,9 @@
       <div class="room-info">
         <h1>Texas Hold'em</h1>
         <div class="meta-row">
-          <span class="meta-pill">Room {{ gameStore.roomId || 'N/A' }}</span>
+          <span class="meta-pill">Room {{ displayRoomId }}</span>
           <span class="meta-pill">Blinds ${{ gameStore.smallBlind }}/{{ gameStore.bigBlind }}</span>
-          <span class="meta-pill">{{ gameStore.players.length }} / {{ gameStore.desiredSeatCount }} players</span>
+          <span class="meta-pill">{{ gameStore.players.length }} / {{ maxSeatLimit }} players</span>
         </div>
         <div class="meta-row secondary">
           <span class="meta-pill">Dealer: {{ dealerName }}</span>
@@ -195,24 +195,21 @@
           <div class="host-controls" v-if="gameStore.isRoomCreator">
             <div class="host-label">You are the Host</div>
             <div class="controls-row">
-              <div class="seat-controls" v-if="gameStore.gamePhase === 'waiting'">
-                <button class="btn light" @click="decreaseSeats" :disabled="seatDecreaseDisabled">-</button>
-                <span>{{ gameStore.desiredSeatCount }} seats</span>
-                <button class="btn light" @click="increaseSeats" :disabled="seatIncreaseDisabled">+</button>
+              <div class="seat-info">
+                {{ seatLabel }}
               </div>
-              <div class="ai-controls" v-if="gameStore.gamePhase === 'waiting'">
-                <button class="btn success" @click="addAI" :disabled="gameStore.players.length >= gameStore.desiredSeatCount">
-                  + Add AI
-                </button>
-                <button class="btn warning" @click="removeAI" :disabled="gameStore.aiPlayerCount === 0">
-                  - Remove AI
-                </button>
-              </div>
+              <button class="btn success" @click="addAI" :disabled="!canAddAI">
+                Add AI
+              </button>
+              <button class="btn warning" @click="removeAI" :disabled="!canRemoveAI">
+                Remove AI
+              </button>
               <button class="btn primary large" @click="startGame" :disabled="!gameStore.canStartGame">
                 {{ gameStore.gamePhase === 'waiting' ? 'Start Game' : 'Deal Next Hand' }}
               </button>
             </div>
           </div>
+
           <div class="waiting-banner" v-else-if="gameStore.gamePhase === 'waiting'">
             Waiting for the host to start the game...
           </div>
@@ -322,8 +319,9 @@ const userStore = useUserStore()
 const gameStore = useGameStore()
 const roomIdParam = ref(route.query.roomId || 'default-room')
 
-const MAX_SEATS = 6
-const MIN_SEATS = 3
+const displayRoomId = computed(() => gameStore.roomId || roomIdParam.value || 'N/A')
+
+const FALLBACK_MAX_SEATS = 6
 
 const showRaisePanel = ref(false)
 const raiseAmount = ref(0)
@@ -354,13 +352,20 @@ const cleanupSocketListeners = () => {
 
 const seatClasses = ['seat-0', 'seat-1', 'seat-2', 'seat-3', 'seat-4', 'seat-5']
 
+const maxSeatLimit = computed(() => gameStore.maxPlayers || FALLBACK_MAX_SEATS)
+const seatLabel = computed(() => `${gameStore.players.length} / ${maxSeatLimit.value} seats`)
 const tablePlayers = computed(() => gameStore.players || [])
 const dealerIndex = computed(() => (typeof gameStore.dealerIndex === 'number' ? gameStore.dealerIndex : -1))
 const dealerName = computed(() => {
-  if (dealerIndex.value < 0 || dealerIndex.value >= tablePlayers.value.length) {
-    return '—'
+  if (!tablePlayers.value.length) {
+    return gameStore.gamePhase === 'waiting' ? 'Waiting' : 'N/A'
   }
-  return tablePlayers.value[dealerIndex.value]?.name || '—'
+
+  if (dealerIndex.value < 0 || dealerIndex.value >= tablePlayers.value.length) {
+    return gameStore.gamePhase === 'waiting' ? 'Waiting' : 'N/A'
+  }
+
+  return tablePlayers.value[dealerIndex.value]?.name || 'N/A'
 })
 
 const paddedCommunityCards = computed(() => {
@@ -387,6 +392,8 @@ const callAmount = computed(() => {
 
 const canCheck = computed(() => callAmount.value === 0)
 const canRaise = computed(() => gameStore.isMyTurn && (gameStore.myPlayer?.chips || 0) > 0)
+const canAddAI = computed(() => gameStore.gamePhase === 'waiting' && gameStore.players.length < maxSeatLimit.value)
+const canRemoveAI = computed(() => gameStore.gamePhase === 'waiting' && gameStore.aiPlayerCount > 0)
 
 const maxRaiseValue = computed(() => Math.max(0, gameStore.myPlayer?.chips || 0))
 
@@ -424,13 +431,6 @@ const phaseDescriptions = {
 }
 
 const phaseLabel = computed(() => phaseNames[gameStore.gamePhase] || (gameStore.gamePhase || '').toUpperCase())
-
-const aiPlayerCount = computed(() => gameStore.aiPlayerCount)
-const seatDecreaseDisabled = computed(() => {
-  const minimumSeats = Math.max(MIN_SEATS, gameStore.realPlayerCount)
-  return gameStore.desiredSeatCount <= minimumSeats
-})
-const seatIncreaseDisabled = computed(() => gameStore.desiredSeatCount >= MAX_SEATS)
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
 
@@ -591,12 +591,18 @@ const startGame = () => {
 }
 
 const addAI = () => {
+  if (!canAddAI.value) {
+    return
+  }
   soundService.playClick()
   gameStore.addAI()
   addLog('AI player added')
 }
 
 const removeAI = () => {
+  if (!canRemoveAI.value) {
+    return
+  }
   soundService.playClick()
   gameStore.removeAI()
   addLog('AI player removed')
@@ -666,24 +672,6 @@ const showHelp = () => {
 
 const closeHelp = () => {
   showHelpDialog.value = false
-}
-
-const increaseSeats = () => {
-  if (seatIncreaseDisabled.value) {
-    return
-  }
-  soundService.playClick()
-  gameStore.setAICount(Math.min(gameStore.desiredSeatCount + 1, MAX_SEATS))
-}
-
-const decreaseSeats = () => {
-  const minimumSeats = Math.max(MIN_SEATS, gameStore.realPlayerCount)
-  if (seatDecreaseDisabled.value) {
-    return
-  }
-  soundService.playClick()
-  const target = Math.max(minimumSeats, gameStore.desiredSeatCount - 1)
-  gameStore.setAICount(target)
 }
 
 const joinCurrentRoom = () => {
@@ -1409,23 +1397,21 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.seat-info {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-}
-
-.seat-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  padding: 0.4rem 0.6rem;
+  padding: 0.45rem 1rem;
   border-radius: 999px;
-}
-
-.ai-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.5);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  min-width: 110px;
 }
 
 .waiting-banner {

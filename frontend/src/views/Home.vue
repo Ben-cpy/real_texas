@@ -28,7 +28,13 @@
           <div class="card mode-card">
             <h3>快速游戏</h3>
             <p>立即开始一局德州扑克游戏</p>
-            <router-link to="/game" class="btn btn-primary">开始游戏</router-link>
+            <button
+              class="btn btn-primary"
+              @click="startQuickGame"
+              :disabled="isCreatingQuickGame"
+            >
+              {{ isCreatingQuickGame ? '创建中...' : '开始游戏' }}
+            </button>
           </div>
           
           <div class="card mode-card">
@@ -90,6 +96,45 @@ const userStats = computed(() => ({
   winRate: userStore.winRate || 0,
   chips: userStore.chips || 0
 }))
+
+const isCreatingQuickGame = ref(false)
+
+const startQuickGame = async () => {
+  if (isCreatingQuickGame.value) {
+    return
+  }
+
+  try {
+    isCreatingQuickGame.value = true
+
+    const timestamp = new Date()
+    const roomName = `Quick Game ${timestamp.getHours().toString().padStart(2, '0')}:${timestamp
+      .getMinutes()
+      .toString()
+      .padStart(2, '0')}`
+
+    const response = await api.createRoom({
+      name: roomName,
+      maxPlayers: 4,
+      smallBlind: 10,
+      bigBlind: 20
+    })
+
+    const roomId = response?.room?.id
+    if (!roomId) {
+      throw new Error('未获取到房间 ID')
+    }
+
+    await api.joinRoom(roomId)
+
+    router.push(`/game?roomId=${roomId}`)
+  } catch (error) {
+    const message = error?.response?.data?.error || error.message || '创建快速游戏失败'
+    ElMessage.error(message)
+  } finally {
+    isCreatingQuickGame.value = false
+  }
+}
 
 const createRoom = async () => {
   try {

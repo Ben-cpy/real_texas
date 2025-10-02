@@ -18,6 +18,7 @@ export const useGameStore = defineStore('game', () => {
   const smallBlind = ref(10)
   const bigBlind = ref(20)
   const desiredSeatCount = ref(6)
+  const maxPlayers = ref(6)
   const winners = ref([])
   const lastAction = ref(null)
   const isConnected = ref(false)
@@ -196,6 +197,9 @@ export const useGameStore = defineStore('game', () => {
     if (data && typeof data.desiredSeatCount === 'number') {
       desiredSeatCount.value = data.desiredSeatCount
     }
+    if (data && typeof data.maxPlayers === 'number') {
+      maxPlayers.value = data.maxPlayers
+    }
     if (data && data.phase) {
       gamePhase.value = data.phase
     }
@@ -204,6 +208,9 @@ export const useGameStore = defineStore('game', () => {
   function handleAICountUpdated(data) {
     if (data && typeof data.desiredSeatCount === 'number') {
       desiredSeatCount.value = data.desiredSeatCount
+    }
+    if (data && typeof data.maxPlayers === 'number') {
+      maxPlayers.value = data.maxPlayers
     }
   }
 
@@ -276,6 +283,7 @@ export const useGameStore = defineStore('game', () => {
     if (state.smallBlind !== undefined) smallBlind.value = state.smallBlind
     if (state.bigBlind !== undefined) bigBlind.value = state.bigBlind
     if (state.desiredSeatCount !== undefined) desiredSeatCount.value = state.desiredSeatCount
+    if (state.maxPlayers !== undefined) maxPlayers.value = state.maxPlayers
   }
 
   /**
@@ -293,6 +301,7 @@ export const useGameStore = defineStore('game', () => {
     gamePhase.value = 'waiting'
     currentPlayerIndex.value = -1
     dealerIndex.value = 0
+    maxPlayers.value = 6
     winners.value = []
     lastAction.value = null
     error.value = null
@@ -341,6 +350,7 @@ export const useGameStore = defineStore('game', () => {
     smallBlind,
     bigBlind,
     desiredSeatCount,
+    maxPlayers,
     winners,
     lastAction,
     isConnected,
