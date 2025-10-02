@@ -191,7 +191,7 @@
         <div class="table-felt">
           <div class="table-glow"></div>
 
-          <div class="community-row">
+          <div v-if="shouldShowCommunityRow" class="community-row">
             <div
               v-for="(card, index) in paddedCommunityCards"
               :key="`community-${index}`"
@@ -494,48 +494,44 @@ const cleanupSocketListeners = () => {
   socketListeners.length = 0
 }
 
-const defaultSeatOrder = [
-  'seat-bottom-right',
-  'seat-right-lower',
-  'seat-right-upper',
-  'seat-top-right',
-  'seat-top-center',
-  'seat-top-left',
-  'seat-left-upper',
-  'seat-left-lower',
-  'seat-bottom-left'
-]
-
-const seatPairs = [
+const symmetricSeatBuckets = [
   ['seat-left-upper', 'seat-right-upper'],
   ['seat-left-lower', 'seat-right-lower'],
   ['seat-top-left', 'seat-top-right'],
   ['seat-bottom-left', 'seat-bottom-right']
 ]
 
+const symmetricSeatPriority = [
+  'seat-top-center',
+  ...symmetricSeatBuckets.flat()
+]
+
 const buildSymmetricSeatLayout = (count) => {
   if (count <= 0) return []
-  if (count > defaultSeatOrder.length) {
-    return defaultSeatOrder
+  if (count >= symmetricSeatPriority.length) {
+    return [...symmetricSeatPriority]
   }
 
   const layout = []
+
   if (count % 2 === 1) {
     layout.push('seat-top-center')
   }
 
-  for (const pair of seatPairs) {
+  for (const bucket of symmetricSeatBuckets) {
     if (layout.length >= count) break
-    layout.push(pair[0])
-    if (layout.length >= count) break
-    layout.push(pair[1])
+    for (const seat of bucket) {
+      if (layout.length >= count) break
+      layout.push(seat)
+    }
   }
 
   if (layout.length < count) {
-    const fallback = defaultSeatOrder.filter((seat) => !layout.includes(seat))
-    for (const seat of fallback) {
+    for (const seat of symmetricSeatPriority) {
       if (layout.length >= count) break
-      layout.push(seat)
+      if (!layout.includes(seat)) {
+        layout.push(seat)
+      }
     }
   }
 
@@ -661,6 +657,8 @@ const dealerName = computed(() => {
 
   return tablePlayers.value[dealerIndex.value]?.name || 'N/A'
 })
+
+const shouldShowCommunityRow = computed(() => gameStore.gamePhase !== 'waiting')
 
 const paddedCommunityCards = computed(() => {
   const cards = gameStore.communityCards ? [...gameStore.communityCards] : []
@@ -1898,7 +1896,7 @@ onBeforeUnmount(() => {
 }
 
 .dealer-chip.my-seat {
-  bottom: -10%;
+  bottom: -14%;
   left: 50%;
   transform: translate(-50%, 0);
 }
