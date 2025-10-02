@@ -1,574 +1,574 @@
-# 德州扑克游戏开发计划 - ✅ 已完成！
+# Texas Hold'em Poker Game Development Plan - ✅ Completed!
 
-## 🎉 项目状态：完全可玩！
+## 🎉 Project Status: Fully Playable!
 
-**目标达成**: ✅ 创建了一个完全功能的在线德州扑克游戏，支持多人模式和单人+AI模式
+**Goal Achieved**: ✅ Created a fully functional online Texas Hold'em poker game supporting multiplayer mode and single-player + AI mode
 
-**服务器状态**:
-- ✅ 后端服务器运行在: http://localhost:3001
-- ✅ 前端服务器运行在: http://localhost:3000
-- ✅ Socket.IO 实时通信正常运行
-
----
-
-## 技术选型
-
-### 前端技术栈
-- **框架**: Vue 3 + Vite ✅
-- **状态管理**: Pinia ✅ (已完全集成)
-- **实时通信**: Socket.io-client ✅ (已完全集成)
-- **HTTP客户端**: Axios ✅ (已完全集成)
-- **UI组件库**: Element Plus ✅
-- **样式**: CSS3 + 响应式设计 ✅
-
-### 后端技术栈
-- **运行环境**: Node.js ✅
-- **Web框架**: Express.js ✅
-- **实时通信**: Socket.io ✅
-- **身份验证**: JWT ✅
-- **密码加密**: bcrypt ✅
-- **数据库**: SQLite (开发) ✅
-- **缓存**: Redis ⚠️ (未实现，不影响核心功能)
-
-### 开发工具
-- **包管理器**: npm ✅
-- **代码规范**: ESLint + Prettier ✅
-- **版本控制**: Git ✅
-- **容器化**: Docker + Docker Compose ⚠️ (未测试)
+**Server Status**:
+- ✅ Backend server running at: http://localhost:3001
+- ✅ Frontend server running at: http://localhost:3000
+- ✅ Socket.IO real-time communication working properly
 
 ---
 
-## ✅ 已完成的工作
+## Technology Stack
 
-### 后端 (Backend) - 完成度: 100% ✅
+### Frontend Technology Stack
+- **Framework**: Vue 3 + Vite ✅
+- **State Management**: Pinia ✅ (Fully integrated)
+- **Real-time Communication**: Socket.io-client ✅ (Fully integrated)
+- **HTTP Client**: Axios ✅ (Fully integrated)
+- **UI Component Library**: Element Plus ✅
+- **Styling**: CSS3 + Responsive Design ✅
 
-#### 核心功能
-- ✅ Express 服务器配置 (server.js)
-- ✅ Socket.IO 实时通信框架（完全集成）
-- ✅ JWT 认证中间件（auth.js）
-- ✅ SQLite 数据库集成（自动初始化）
-- ✅ CORS 配置（支持跨域）
+### Backend Technology Stack
+- **Runtime**: Node.js ✅
+- **Web Framework**: Express.js ✅
+- **Real-time Communication**: Socket.io ✅
+- **Authentication**: JWT ✅
+- **Password Encryption**: bcrypt ✅
+- **Database**: SQLite (Development) ✅
+- **Cache**: Redis ⚠️ (Not implemented, doesn't affect core functionality)
 
-#### 数据库模型
-- ✅ User 模型（用户管理）
-- ✅ GameRoom 模型（房间管理）
-- ✅ 完整的数据库 Schema
-  - ✅ users 表（用户信息、筹码、统计）
-  - ✅ game_rooms 表（房间信息、状态）
-  - ✅ game_records 表（游戏记录）
-  - ✅ user_game_records 表（用户游戏记录）
-
-#### 游戏引擎 (PokerGame.js)
-- ✅ 完整的扑克游戏引擎（705行代码）
-- ✅ Card 类（卡牌表示）
-- ✅ Deck 类（牌组管理、洗牌、发牌）
-- ✅ 游戏逻辑
-  - ✅ 发牌机制（底牌、公共牌）
-  - ✅ 盲注系统
-  - ✅ 下注回合管理
-  - ✅ 玩家操作（Fold/Check/Call/Raise/All-in）
-- ✅ 手牌评估算法（完整实现）
-  - ✅ 高牌（High Card）
-  - ✅ 一对（One Pair）
-  - ✅ 两对（Two Pair）
-  - ✅ 三条（Three of a Kind）
-  - ✅ 顺子（Straight）
-  - ✅ 同花（Flush）
-  - ✅ 葫芦（Full House）
-  - ✅ 四条（Four of a Kind）
-  - ✅ 同花顺（Straight Flush）
-  - ✅ 皇家同花顺（Royal Flush）
-- ✅ AI 玩家支持（智能决策）
-- ✅ 游戏阶段管理（Preflop/Flop/Turn/River/Showdown）
-- ✅ 获胜者判定和奖池分配
-
-#### Socket.IO 事件处理 (gameSocket.js)
-- ✅ 玩家认证（authenticate）
-- ✅ 加入/离开房间（join_room/leave_room）
-- ✅ 游戏动作处理（game_action）
-- ✅ 开始游戏（start_game）
-- ✅ 重置游戏（reset_game）
-- ✅ 添加AI（add_ai）
-- ✅ AI 自动行动
-- ✅ 游戏状态实时同步
-- ✅ 玩家连接/断线处理
-
-#### RESTful API 路由
-- ✅ 认证路由（auth.js）
-  - POST /api/auth/register - 用户注册
-  - POST /api/auth/login - 用户登录
-  - POST /api/auth/verify - Token验证
-- ✅ 游戏路由（game.js）
-  - GET /api/game/rooms - 获取房间列表
-  - POST /api/game/rooms - 创建房间
-  - POST /api/game/rooms/:id/join - 加入房间
-  - POST /api/game/rooms/:id/leave - 离开房间
-  - GET /api/game/rooms/:id - 获取房间详情
-- ✅ 用户路由（user.js）
-  - GET /api/user/profile - 获取用户信息
-  - PUT /api/user/profile - 更新用户信息
-  - GET /api/user/stats - 获取用户统计
-  - GET /api/user/leaderboard - 获取排行榜
+### Development Tools
+- **Package Manager**: npm ✅
+- **Code Standards**: ESLint + Prettier ✅
+- **Version Control**: Git ✅
+- **Containerization**: Docker + Docker Compose ⚠️ (Not tested)
 
 ---
 
-### 前端 (Frontend) - 完成度: 100% ✅
+## ✅ Completed Work
 
-#### 项目结构
-- ✅ Vue 3 项目结构（Composition API）
-- ✅ Vue Router 路由配置（带认证守卫）
-- ✅ Element Plus UI 集成
-- ✅ 响应式设计样式（完全适配移动端）
+### Backend - Completion: 100% ✅
 
-#### 服务层（Services）
-- ✅ **API 服务层** (frontend/src/services/api.js)
-  - ✅ Axios 实例配置
-  - ✅ 请求/响应拦截器
-  - ✅ JWT Token 自动注入
-  - ✅ 错误处理（401自动跳转登录）
-  - ✅ 所有后端API封装
-    - 认证API（login/register/verify）
-    - 用户API（profile/stats/leaderboard）
-    - 游戏API（rooms CRUD）
+#### Core Features
+- ✅ Express server configuration (server.js)
+- ✅ Socket.IO real-time communication framework (Fully integrated)
+- ✅ JWT authentication middleware (auth.js)
+- ✅ SQLite database integration (Auto-initialization)
+- ✅ CORS configuration (Cross-origin support)
 
-- ✅ **Socket.IO 客户端服务** (frontend/src/services/socket.js)
-  - ✅ 单例模式设计
-  - ✅ 连接管理（connect/disconnect）
-  - ✅ 自动重连机制
-  - ✅ 认证功能（authenticate）
-  - ✅ 房间操作（joinRoom/leaveRoom）
-  - ✅ 游戏操作（sendGameAction/startGame/resetGame/addAI）
-  - ✅ 事件监听管理（on/off）
-  - ✅ 连接状态追踪
+#### Database Models
+- ✅ User model (User management)
+- ✅ GameRoom model (Room management)
+- ✅ Complete database Schema
+  - ✅ users table (User info, chips, statistics)
+  - ✅ game_rooms table (Room info, status)
+  - ✅ game_records table (Game records)
+  - ✅ user_game_records table (User game records)
 
-#### 状态管理（Pinia Stores）
-- ✅ **用户状态管理** (frontend/src/stores/user.js)
-  - ✅ 用户认证状态（token/isLoggedIn）
-  - ✅ 用户信息（username/chips/stats）
-  - ✅ 登录/注册/登出功能
-  - ✅ Token 验证和刷新
-  - ✅ 用户资料管理
-  - ✅ 筹码和统计更新
-  - ✅ LocalStorage 自动同步
+#### Game Engine (PokerGame.js)
+- ✅ Complete poker game engine (705 lines of code)
+- ✅ Card class (Card representation)
+- ✅ Deck class (Deck management, shuffle, deal)
+- ✅ Game logic
+  - ✅ Dealing mechanism (Hole cards, Community cards)
+  - ✅ Blind system
+  - ✅ Betting round management
+  - ✅ Player actions (Fold/Check/Call/Raise/All-in)
+- ✅ Hand evaluation algorithm (Complete implementation)
+  - ✅ High Card
+  - ✅ One Pair
+  - ✅ Two Pair
+  - ✅ Three of a Kind
+  - ✅ Straight
+  - ✅ Flush
+  - ✅ Full House
+  - ✅ Four of a Kind
+  - ✅ Straight Flush
+  - ✅ Royal Flush
+- ✅ AI player support (Intelligent decision-making)
+- ✅ Game phase management (Preflop/Flop/Turn/River/Showdown)
+- ✅ Winner determination and pot distribution
 
-- ✅ **游戏状态管理** (frontend/src/stores/game.js)
-  - ✅ 房间状态（roomId/roomName/roomCreatorId）
-  - ✅ 游戏状态（players/communityCards/pot/currentBet）
-  - ✅ 游戏阶段（gamePhase/currentPlayerIndex）
-  - ✅ 计算属性（isMyTurn/isRoomCreator/canStartGame）
-  - ✅ Socket 事件处理
-  - ✅ 游戏操作封装
-  - ✅ 实时状态同步
+#### Socket.IO Event Handling (gameSocket.js)
+- ✅ Player authentication (authenticate)
+- ✅ Join/Leave room (join_room/leave_room)
+- ✅ Game action handling (game_action)
+- ✅ Start game (start_game)
+- ✅ Reset game (reset_game)
+- ✅ Add AI (add_ai)
+- ✅ AI automatic actions
+- ✅ Real-time game state synchronization
+- ✅ Player connection/disconnection handling
 
-#### 页面组件
-- ✅ **登录页面** (Login.vue)
-  - ✅ 用户登录功能（真实API）
-  - ✅ 用户注册功能（真实API）
-  - ✅ 表单验证
-  - ✅ 错误提示
-  - ✅ 注册后自动登录
-  - ✅ Socket自动连接
+#### RESTful API Routes
+- ✅ Authentication routes (auth.js)
+  - POST /api/auth/register - User registration
+  - POST /api/auth/login - User login
+  - POST /api/auth/verify - Token verification
+- ✅ Game routes (game.js)
+  - GET /api/game/rooms - Get room list
+  - POST /api/game/rooms - Create room
+  - POST /api/game/rooms/:id/join - Join room
+  - POST /api/game/rooms/:id/leave - Leave room
+  - GET /api/game/rooms/:id - Get room details
+- ✅ User routes (user.js)
+  - GET /api/user/profile - Get user info
+  - PUT /api/user/profile - Update user info
+  - GET /api/user/stats - Get user statistics
+  - GET /api/user/leaderboard - Get leaderboard
 
-- ✅ **主页** (Home.vue)
-  - ✅ 快速游戏入口
-  - ✅ 创建房间功能（真实API）
-  - ✅ 加入房间功能（真实API）
-  - ✅ 用户统计显示（真实数据）
-  - ✅ 游戏场次/胜率/筹码展示
+---
 
-- ✅ **游戏页面** (Game.vue)
-  - ✅ 完整的扑克桌布局（1700+行代码）
-  - ✅ 响应式玩家位置计算
-  - ✅ 卡牌显示组件（支持花色颜色）
-  - ✅ 公共牌展示
-  - ✅ 底池和当前下注显示
-  - ✅ 下注控制面板
-    - ✅ Fold（弃牌）
-    - ✅ Check（过牌）
-    - ✅ Call（跟注）
-    - ✅ Raise（加注，带金额输入）
-    - ✅ All-in（全下）
-  - ✅ 游戏状态显示
-  - ✅ 玩家信息展示（头像、名字、筹码、操作）
-  - ✅ AI玩家标识
-  - ✅ 当前回合玩家高亮
-  - ✅ 游戏日志系统
-  - ✅ 房主控制（开始/重置/添加AI）
-  - ✅ 完整的Socket.IO集成
-  - ✅ 实时游戏状态更新
-  - ✅ 专业赌场风格UI设计
-  - ✅ 流畅的动画效果
+### Frontend - Completion: 100% ✅
 
-#### 配置文件
-- ✅ 环境变量配置（.env）
+#### Project Structure
+- ✅ Vue 3 project structure (Composition API)
+- ✅ Vue Router configuration (With authentication guards)
+- ✅ Element Plus UI integration
+- ✅ Responsive design styles (Fully mobile-friendly)
+
+#### Service Layer (Services)
+- ✅ **API Service Layer** (frontend/src/services/api.js)
+  - ✅ Axios instance configuration
+  - ✅ Request/Response interceptors
+  - ✅ JWT Token auto-injection
+  - ✅ Error handling (401 auto-redirect to login)
+  - ✅ All backend API encapsulation
+    - Authentication APIs (login/register/verify)
+    - User APIs (profile/stats/leaderboard)
+    - Game APIs (rooms CRUD)
+
+- ✅ **Socket.IO Client Service** (frontend/src/services/socket.js)
+  - ✅ Singleton pattern design
+  - ✅ Connection management (connect/disconnect)
+  - ✅ Auto-reconnection mechanism
+  - ✅ Authentication (authenticate)
+  - ✅ Room operations (joinRoom/leaveRoom)
+  - ✅ Game operations (sendGameAction/startGame/resetGame/addAI)
+  - ✅ Event listener management (on/off)
+  - ✅ Connection status tracking
+
+#### State Management (Pinia Stores)
+- ✅ **User State Management** (frontend/src/stores/user.js)
+  - ✅ User authentication status (token/isLoggedIn)
+  - ✅ User information (username/chips/stats)
+  - ✅ Login/register/logout functions
+  - ✅ Token verification and refresh
+  - ✅ User profile management
+  - ✅ Chips and statistics updates
+  - ✅ LocalStorage auto-sync
+
+- ✅ **Game State Management** (frontend/src/stores/game.js)
+  - ✅ Room state (roomId/roomName/roomCreatorId)
+  - ✅ Game state (players/communityCards/pot/currentBet)
+  - ✅ Game phase (gamePhase/currentPlayerIndex)
+  - ✅ Computed properties (isMyTurn/isRoomCreator/canStartGame)
+  - ✅ Socket event handling
+  - ✅ Game operation encapsulation
+  - ✅ Real-time state synchronization
+
+#### Page Components
+- ✅ **Login Page** (Login.vue)
+  - ✅ User login functionality (Real API)
+  - ✅ User registration functionality (Real API)
+  - ✅ Form validation
+  - ✅ Error messages
+  - ✅ Auto-login after registration
+  - ✅ Socket auto-connection
+
+- ✅ **Home Page** (Home.vue)
+  - ✅ Quick game entry
+  - ✅ Create room functionality (Real API)
+  - ✅ Join room functionality (Real API)
+  - ✅ User statistics display (Real data)
+  - ✅ Game sessions/win rate/chips display
+
+- ✅ **Game Page** (Game.vue)
+  - ✅ Complete poker table layout (1700+ lines of code)
+  - ✅ Responsive player position calculation
+  - ✅ Card display components (Support suit colors)
+  - ✅ Community cards display
+  - ✅ Pot and current bet display
+  - ✅ Betting control panel
+    - ✅ Fold
+    - ✅ Check
+    - ✅ Call
+    - ✅ Raise (With amount input)
+    - ✅ All-in
+  - ✅ Game status display
+  - ✅ Player information display (Avatar, name, chips, actions)
+  - ✅ AI player indicators
+  - ✅ Current turn player highlight
+  - ✅ Game log system
+  - ✅ Room creator controls (Start/Reset/Add AI)
+  - ✅ Complete Socket.IO integration
+  - ✅ Real-time game state updates
+  - ✅ Professional casino-style UI design
+  - ✅ Smooth animation effects
+
+#### Configuration Files
+- ✅ Environment variables configuration (.env)
   - VITE_API_URL=http://localhost:3001
   - VITE_SOCKET_URL=http://localhost:3001
-- ✅ 环境变量示例（.env.example）
-- ✅ 路由配置（认证守卫）
-- ✅ Pinia 配置
-- ✅ CSS 变量系统（响应式设计）
+- ✅ Environment variables example (.env.example)
+- ✅ Router configuration (Authentication guards)
+- ✅ Pinia configuration
+- ✅ CSS variables system (Responsive design)
 
 ---
 
-## ✅ 实现的核心功能
+## ✅ Implemented Core Features
 
-### 🎮 游戏功能
-1. ✅ **用户系统**
-   - 注册和登录
-   - JWT 身份认证
-   - 用户资料管理
-   - 游戏统计追踪
-   - 排行榜系统
+### 🎮 Game Features
+1. ✅ **User System**
+   - Registration and login
+   - JWT authentication
+   - User profile management
+   - Game statistics tracking
+   - Leaderboard system
 
-2. ✅ **房间系统**
-   - 创建游戏房间
-   - 加入游戏房间
-   - 房间列表查看
-   - 房主权限控制
+2. ✅ **Room System**
+   - Create game rooms
+   - Join game rooms
+   - Room list browsing
+   - Room creator permission control
 
-3. ✅ **游戏模式**
-   - **单人+AI模式**: 独自进入房间时自动添加AI陪玩
-   - **多人对战模式**: 支持2-6名真实玩家同时游戏
-   - 房主可手动添加更多AI
+3. ✅ **Game Modes**
+   - **Single Player + AI Mode**: Automatically adds AI when playing alone
+   - **Multiplayer Battle Mode**: Supports 2-6 real players simultaneously
+   - Room creator can manually add more AI
 
-4. ✅ **德州扑克完整规则**
-   - 标准52张牌
-   - 盲注系统（小盲/大盲）
-   - 四轮下注（Preflop/Flop/Turn/River）
-   - 所有标准操作（Fold/Check/Call/Raise/All-in）
-   - 完整的手牌评估系统
-   - 获胜者判定
-   - 奖池分配
+4. ✅ **Complete Texas Hold'em Rules**
+   - Standard 52-card deck
+   - Blind system (Small blind/Big blind)
+   - Four betting rounds (Preflop/Flop/Turn/River)
+   - All standard actions (Fold/Check/Call/Raise/All-in)
+   - Complete hand evaluation system
+   - Winner determination
+   - Pot distribution
 
-5. ✅ **实时通信**
-   - WebSocket 实时连接
-   - 游戏状态即时同步
-   - 玩家操作实时广播
-   - AI行动自动处理
-   - 断线重连机制
+5. ✅ **Real-time Communication**
+   - WebSocket real-time connection
+   - Instant game state synchronization
+   - Real-time player action broadcasting
+   - AI action automatic processing
+   - Disconnection reconnection mechanism
 
-6. ✅ **用户界面**
-   - 专业赌场风格设计
-   - 完全响应式布局（支持移动端）
-   - 流畅的动画效果
-   - 直观的操作界面
-   - 实时游戏日志
-   - 玩家状态可视化
-
----
-
-## 📊 项目完成度
-
-| 模块 | 完成度 | 状态 | 说明 |
-|------|--------|------|------|
-| 后端服务器 | 100% | ✅ 完成 | 生产就绪 |
-| 游戏引擎 | 100% | ✅ 完成 | 完整的德州扑克逻辑 + 高级AI |
-| 数据库 | 100% | ✅ 完成 | Schema 完整 + 成就系统 |
-| Socket.IO (服务端) | 100% | ✅ 完成 | 实时通信 + 聊天 |
-| 前端 UI | 100% | ✅ 完成 | 设计精美，响应式 + 聊天面板 |
-| 前端逻辑 | 100% | ✅ 完成 | 已连接后端 + 音效集成 |
-| API 集成 | 100% | ✅ 完成 | 完整的API服务层 |
-| Socket.IO (客户端) | 100% | ✅ 完成 | 实时通信 + 聊天功能 |
-| 状态管理 | 100% | ✅ 完成 | Pinia 完全集成 |
-| 音效系统 | 100% | ✅ 完成 | Web Audio API |
-| 成就系统 | 100% | ✅ 完成 | 17个成就 |
-| 单元测试 | 100% | ✅ 完成 | 40+测试用例 |
-
-**总体完成度: 100% ✅**
-**可玩性: ✅ 完全可玩**（支持单人+AI和多人对战，含聊天、音效、成就）
+6. ✅ **User Interface**
+   - Professional casino-style design
+   - Fully responsive layout (Mobile-friendly)
+   - Smooth animation effects
+   - Intuitive operation interface
+   - Real-time game logs
+   - Player state visualization
 
 ---
 
-## 🚀 如何开始游戏
+## 📊 Project Completion Status
 
-### 启动服务器
+| Module | Completion | Status | Description |
+|--------|------------|---------|-------------|
+| Backend Server | 100% | ✅ Complete | Production ready |
+| Game Engine | 100% | ✅ Complete | Complete Texas Hold'em logic + Advanced AI |
+| Database | 100% | ✅ Complete | Schema complete + Achievement system |
+| Socket.IO (Server) | 100% | ✅ Complete | Real-time communication + Chat |
+| Frontend UI | 100% | ✅ Complete | Beautiful design, responsive + Chat panel |
+| Frontend Logic | 100% | ✅ Complete | Backend connected + Sound effects integrated |
+| API Integration | 100% | ✅ Complete | Complete API service layer |
+| Socket.IO (Client) | 100% | ✅ Complete | Real-time communication + Chat functionality |
+| State Management | 100% | ✅ Complete | Pinia fully integrated |
+| Sound System | 100% | ✅ Complete | Web Audio API |
+| Achievement System | 100% | ✅ Complete | 17 achievements |
+| Unit Tests | 100% | ✅ Complete | 40+ test cases |
 
-**终端 1 - 启动后端**:
+**Overall Completion: 100% ✅**
+**Playability: ✅ Fully Playable** (Supports single player + AI and multiplayer battles, includes chat, sound effects, achievements)
+
+---
+
+## 🚀 How to Start Playing
+
+### Start Servers
+
+**Terminal 1 - Start Backend**:
 ```bash
 cd backend
-npm install  # 首次运行
+npm install  # First time only
 npm run dev
-# 后端运行在 http://localhost:3001
+# Backend runs on http://localhost:3001
 ```
 
-**终端 2 - 启动前端**:
+**Terminal 2 - Start Frontend**:
 ```bash
 cd frontend
-npm install  # 首次运行
+npm install  # First time only
 npm run dev
-# 前端运行在 http://localhost:3000
+# Frontend runs on http://localhost:3000
 ```
 
-### 开始游戏
+### Start Playing
 
-1. ✅ 打开浏览器访问 http://localhost:3000
-2. ✅ 注册新账号（或使用现有账号登录）
-3. ✅ 选择游戏模式:
-   - **快速游戏**: 立即开始（自动添加AI）
-   - **创建房间**: 创建自己的房间，邀请好友
-   - **加入房间**: 输入房间ID加入好友的游戏
-4. ✅ 享受游戏！
+1. ✅ Open browser and visit http://localhost:3000
+2. ✅ Register new account (or login with existing account)
+3. ✅ Choose game mode:
+   - **Quick Game**: Start immediately (auto-add AI)
+   - **Create Room**: Create your own room, invite friends
+   - **Join Room**: Enter room ID to join friend's game
+4. ✅ Enjoy the game!
 
-### 替代访问方式（如果代理阻止localhost）
-- 使用局域网IP: http://192.168.1.105:3000
-- 在V2rayN中添加bypass规则: localhost, 127.0.0.1, 192.168.1.0/24
-
----
-
-## 🎯 游戏特性
-
-### ✅ 已实现
-- ✅ 完整的德州扑克游戏规则
-- ✅ 单人+AI模式（AI自动添加）
-- ✅ 多人在线对战（2-6人）
-- ✅ 实时游戏同步（WebSocket）
-- ✅ 用户认证和授权（JWT）
-- ✅ 游戏历史记录
-- ✅ 用户统计和排行榜
-- ✅ 响应式设计（移动端友好）
-- ✅ 专业赌场UI
-- ✅ 流畅动画效果
-- ✅ **实时聊天系统** - 房间内玩家即时通讯
-- ✅ **高级AI策略** - 智能决策，考虑牌力、赔率、位置
-- ✅ **动态音效系统** - 15+种游戏音效，可开关
-- ✅ **成就系统** - 17个成就，自动解锁和奖励
-- ✅ **单元测试** - 完整的游戏引擎测试覆盖
-
-### ✅ 2025-10-01 新增功能
-- ✅ **聊天功能** - 完整的实时聊天系统
-- ✅ **更高级的AI策略** - 基于手牌强度、赔率和位置的智能决策
-- ✅ **音效系统** - 15+种游戏音效，支持开关和音量调节
-- ✅ **成就系统** - 17个成就，自动解锁和筹码奖励
-- ✅ **单元测试** - 40+测试用例覆盖游戏引擎
-
-### ⏳ 可选的未来改进
-- ⏳ 牌桌动画优化
-- ⏳ 每日任务系统
-- ⏳ Redis 缓存
-- ⏳ 生产环境部署（Docker/Nginx）
-- ⏳ E2E测试
+### Alternative Access (if proxy blocks localhost)
+- Use LAN IP: http://192.168.1.105:3000
+- Add bypass rules in V2rayN: localhost, 127.0.0.1, 192.168.1.0/24
 
 ---
 
-## 🎮 游戏说明
+## 🎯 Game Features
 
-### 操作说明
-- **Fold (弃牌)**: 放弃当前手牌
-- **Check (过牌)**: 不下注继续（仅当前无需跟注时可用）
-- **Call (跟注)**: 跟上当前下注金额
-- **Raise (加注)**: 增加下注金额
-- **All-in (全下)**: 下注所有筹码
+### ✅ Implemented
+- ✅ Complete Texas Hold'em game rules
+- ✅ Single player + AI mode (Auto-add AI)
+- ✅ Multiplayer online battles (2-6 players)
+- ✅ Real-time game synchronization (WebSocket)
+- ✅ User authentication and authorization (JWT)
+- ✅ Game history records
+- ✅ User statistics and leaderboard
+- ✅ Responsive design (Mobile-friendly)
+- ✅ Professional casino UI
+- ✅ Smooth animation effects
+- ✅ **Real-time Chat System** - Instant messaging between players in room
+- ✅ **Advanced AI Strategy** - Intelligent decision-making considering hand strength, pot odds, position
+- ✅ **Dynamic Sound System** - 15+ game sound effects, toggleable
+- ✅ **Achievement System** - 17 achievements, auto-unlock and rewards
+- ✅ **Unit Tests** - Complete game engine test coverage
 
-### 游戏流程
-1. 房主点击"开始游戏"（至少2名玩家）
-2. 系统发放底牌（每人2张）
-3. 进行四轮下注:
-   - **Preflop**: 发底牌后第一轮下注
-   - **Flop**: 翻开3张公共牌后
-   - **Turn**: 翻开第4张公共牌后
-   - **River**: 翻开第5张公共牌后
-4. **Showdown**: 比较手牌，决定胜者
-5. 获胜者获得底池筹码
+### ✅ 2025-10-01 New Features
+- ✅ **Chat Feature** - Complete real-time chat system
+- ✅ **More Advanced AI Strategy** - Intelligent decisions based on hand strength, pot odds and position
+- ✅ **Sound System** - 15+ game sound effects, supports toggle and volume adjustment
+- ✅ **Achievement System** - 17 achievements, auto-unlock and chip rewards
+- ✅ **Unit Tests** - 40+ test cases covering game engine
 
-### 手牌排名（从高到低）
-1. **皇家同花顺** (Royal Flush): 10-J-Q-K-A 同花
-2. **同花顺** (Straight Flush): 五张连续同花牌
-3. **四条** (Four of a Kind): 四张相同点数
-4. **葫芦** (Full House): 三条+一对
-5. **同花** (Flush): 五张同花色
-6. **顺子** (Straight): 五张连续点数
-7. **三条** (Three of a Kind): 三张相同点数
-8. **两对** (Two Pair): 两个对子
-9. **一对** (One Pair): 一个对子
-10. **高牌** (High Card): 单张最大牌
-
----
-
-## 💡 技术亮点
-
-### 后端架构
-- **RESTful API**: 清晰的API设计
-- **Socket.IO**: 实时双向通信
-- **JWT 认证**: 安全的身份验证
-- **SQLite**: 轻量级数据库（易于部署）
-- **事件驱动**: 高效的游戏状态管理
-
-### 前端架构
-- **Vue 3 Composition API**: 现代化的组件设计
-- **Pinia**: 轻量级状态管理
-- **模块化服务层**: API和Socket分离
-- **响应式设计**: CSS clamp()实现流畅缩放
-- **专业UI设计**: 赌场级别的视觉效果
-
-### 游戏引擎
-- **完整的扑克逻辑**: 严格遵循德州扑克规则
-- **高级AI策略**: 基于手牌强度、赔率和位置的智能决策系统
-- **手牌评估**: 高效的算法实现，支持所有牌型识别
-- **边界情况处理**: 平局、边池等特殊情况
-- **成就系统**: 17个成就自动追踪和奖励
-- **音效系统**: Web Audio API 实现的动态音效
-- **实时聊天**: WebSocket 实时消息通信
-- **单元测试**: 40+测试用例保证代码质量
+### ⏳ Optional Future Improvements
+- ⏳ Table animation optimization
+- ⏳ Daily task system
+- ⏳ Redis caching
+- ⏳ Production deployment (Docker/Nginx)
+- ⏳ E2E testing
 
 ---
 
-## 🛠️ 故障排除
+## 🎮 Game Instructions
 
-### 端口被占用
+### Controls
+- **Fold**: Give up current hand
+- **Check**: Continue without betting (Only available when no call is needed)
+- **Call**: Match current bet amount
+- **Raise**: Increase bet amount
+- **All-in**: Bet all chips
+
+### Game Flow
+1. Room creator clicks "Start Game" (Minimum 2 players)
+2. System deals hole cards (2 cards per player)
+3. Four betting rounds:
+   - **Preflop**: First betting round after hole cards dealt
+   - **Flop**: After revealing 3 community cards
+   - **Turn**: After revealing 4th community card
+   - **River**: After revealing 5th community card
+4. **Showdown**: Compare hands, determine winner
+5. Winner takes the pot
+
+### Hand Rankings (High to Low)
+1. **Royal Flush**: 10-J-Q-K-A of same suit
+2. **Straight Flush**: Five consecutive cards of same suit
+3. **Four of a Kind**: Four cards of same rank
+4. **Full House**: Three of a kind + a pair
+5. **Flush**: Five cards of same suit
+6. **Straight**: Five consecutive cards
+7. **Three of a Kind**: Three cards of same rank
+8. **Two Pair**: Two different pairs
+9. **One Pair**: One pair
+10. **High Card**: Highest single card
+
+---
+
+## 💡 Technical Highlights
+
+### Backend Architecture
+- **RESTful API**: Clean API design
+- **Socket.IO**: Real-time bidirectional communication
+- **JWT Authentication**: Secure identity verification
+- **SQLite**: Lightweight database (Easy deployment)
+- **Event-driven**: Efficient game state management
+
+### Frontend Architecture
+- **Vue 3 Composition API**: Modern component design
+- **Pinia**: Lightweight state management
+- **Modular Service Layer**: API and Socket separation
+- **Responsive Design**: CSS clamp() for smooth scaling
+- **Professional UI Design**: Casino-level visual effects
+
+### Game Engine
+- **Complete Poker Logic**: Strictly follows Texas Hold'em rules
+- **Advanced AI Strategy**: Intelligent decision-making system based on hand strength, pot odds and position
+- **Hand Evaluation**: Efficient algorithm implementation supporting all hand types
+- **Edge Case Handling**: Special situations like ties, side pots
+- **Achievement System**: 17 achievements with auto-tracking and rewards
+- **Sound System**: Dynamic sound effects using Web Audio API
+- **Real-time Chat**: WebSocket real-time message communication
+- **Unit Tests**: 40+ test cases ensuring code quality
+
+---
+
+## 🛠️ Troubleshooting
+
+### Port Already in Use
 ```bash
-# 检查端口占用
+# Check port usage
 netstat -ano | findstr :3001
 netstat -ano | findstr :3000
 
-# 结束进程（Windows）
+# Kill process (Windows)
 taskkill //PID <PID> //F
 ```
 
-### 代理阻止localhost
-- 方案1: 使用局域网IP (http://192.168.1.105:3000)
-- 方案2: 配置代理软件bypass规则
+### Proxy Blocks localhost
+- Option 1: Use LAN IP (http://192.168.1.105:3000)
+- Option 2: Configure proxy software bypass rules
 
-### Socket连接失败
-- 检查后端是否运行
-- 检查防火墙设置
-- 查看浏览器控制台错误信息
+### Socket Connection Failed
+- Check if backend is running
+- Check firewall settings
+- Check browser console error messages
 
-### 数据库错误
-- 删除 `backend/data/database.sqlite` 重新初始化
-- 检查文件权限
-
----
-
-## 📝 开发记录
-
-### 2025-10-01 - 项目完成 ✅
-- ✅ 创建完整的API服务层
-- ✅ 集成Socket.IO客户端
-- ✅ 实现Pinia状态管理
-- ✅ 更新所有Vue组件连接真实后端
-- ✅ 添加环境变量配置
-- ✅ 完成游戏核心功能
-- ✅ 测试单人+AI模式
-- ✅ 测试多人对战模式
-- ✅ 更新文档
-
-**结果**: 游戏完全可玩，支持单人+AI和多人对战！
-
-### 2025-10-01 - 功能增强 ✅
-
-#### 修复
-- ✅ 修复 Game.vue:190:1 缺失 `</script>` 和 `<style scoped>` 标签错误
-
-#### 新增功能
-
-**1. 聊天系统 🗨️**
-- ✅ 后端: Socket 事件处理 (`send_chat_message`)
-- ✅ 前端: 完整的聊天面板（输入框、消息列表）
-- ✅ 实时消息广播到房间内所有玩家
-- ✅ 消息长度限制（200字符）
-- ✅ 消息历史记录（最多50条）
-- ✅ 区分自己和他人的消息样式
-
-**2. 高级AI策略 🤖**
-- ✅ 手牌强度计算（0-1评分系统）
-  - 根据牌型等级评估（同花顺、四条、葫芦等）
-  - Preflop阶段特殊处理（对子、高牌、同花、连牌）
-- ✅ 赔率计算（Pot Odds）决策
-- ✅ 位置感知策略
-  - 早位（Early Position）：谨慎保守
-  - 中位（Middle Position）：平衡策略
-  - 晚位（Late Position）：激进主动，偶尔诈唬
-- ✅ 智能下注决策
-  - 强牌（>0.75）：大胆加注
-  - 中等牌（0.5-0.75）：根据赔率跟注
-  - 中下牌（0.3-0.5）：小注跟注
-  - 弱牌（<0.3）：弃牌或诈唬
-
-**3. 音效系统 🔊**
-- ✅ Web Audio API 实现
-- ✅ 15+种游戏音效
-  - 发牌、下注、筹码声
-  - Fold/Check/Call/Raise/All-in 音效
-  - 胜利/失败音效
-  - 提示/通知/错误音效
-- ✅ 音效开关按钮（🔊/🔇）
-- ✅ 音量调节（0-1）
-- ✅ LocalStorage 保存设置
-- ✅ 游戏事件自动触发音效
-
-**4. 成就系统 🏆**
-- ✅ 17个成就，5大类别
-  - 新手成就：首局、经验丰富、大师等
-  - 胜利成就：首胜、常胜将军、冠军等
-  - 胜率成就：幸运连胜、火热手气
-  - 筹码成就：收集者、豪赌客、百万富翁
-  - 特殊成就：All-in之王、诈唬大师、逆转之王
-- ✅ 后端成就追踪
-  - 数据库 achievements 列（JSON格式）
-  - 自动检测解锁条件
-  - 成就奖励发放（100-10,000筹码）
-- ✅ 前端成就通知
-  - 实时弹窗提示
-  - 音效反馈
-  - 游戏日志记录
-
-**5. 单元测试 ✅**
-- ✅ 创建 PokerGame.test.js
-- ✅ 40+测试用例，覆盖：
-  - Card 类（创建、值计算、字符串表示）
-  - Deck 类（洗牌、发牌、重置）
-  - 玩家管理（添加、移除、数量、AI）
-  - 游戏流程（开始、发牌、盲注、操作）
-  - 手牌评估（对子、两对、三条、同花、葫芦、四条）
-  - 游戏状态（状态获取、结束判断）
-  - AI决策（决策生成、手牌强度计算）
-
-**技术文件清单**:
-- `backend/src/socket/gameSocket.js` - 聊天和成就事件处理
-- `backend/src/services/PokerGame.js` - 增强的AI策略
-- `backend/src/services/achievements.js` - 成就定义和检测
-- `backend/src/models/User.js` - 成就数据库方法
-- `backend/src/models/database.js` - 添加 achievements 列
-- `frontend/src/services/socket.js` - 聊天消息发送
-- `frontend/src/services/sound.js` - 音效服务（新文件）
-- `frontend/src/views/Game.vue` - 聊天UI、音效集成、成就通知
-- `backend/src/services/PokerGame.test.js` - 单元测试（新文件）
-
-**结果**: 5个主要功能增强全部完成，游戏体验显著提升！
+### Database Errors
+- Delete `backend/data/database.sqlite` to reinitialize
+- Check file permissions
 
 ---
 
-## 📚 相关文档
+## 📝 Development Log
 
-- **项目说明**: README.md
-- **开发指南**: CLAUDE.md
-- **API文档**: 访问 http://localhost:3001/api/health
-- **游戏规则**: 标准德州扑克规则
+### 2025-10-01 - Project Completed ✅
+- ✅ Created complete API service layer
+- ✅ Integrated Socket.IO client
+- ✅ Implemented Pinia state management
+- ✅ Updated all Vue components to connect to real backend
+- ✅ Added environment variable configuration
+- ✅ Completed game core functionality
+- ✅ Tested single player + AI mode
+- ✅ Tested multiplayer battle mode
+- ✅ Updated documentation
+
+**Result**: Game is fully playable, supporting single player + AI and multiplayer battles!
+
+### 2025-10-01 - Feature Enhancements ✅
+
+#### Fixes
+- ✅ Fixed Game.vue:190:1 missing `</script>` and `<style scoped>` tag errors
+
+#### New Features
+
+**1. Chat System 🗨️**
+- ✅ Backend: Socket event handling (`send_chat_message`)
+- ✅ Frontend: Complete chat panel (Input box, message list)
+- ✅ Real-time message broadcast to all players in room
+- ✅ Message length limit (200 characters)
+- ✅ Message history (Maximum 50 messages)
+- ✅ Different styles for own and others' messages
+
+**2. Advanced AI Strategy 🤖**
+- ✅ Hand strength calculation (0-1 rating system)
+  - Evaluation based on hand type rank (Straight flush, Four of a kind, Full house, etc.)
+  - Preflop stage special handling (Pairs, High cards, Suited, Connected)
+- ✅ Pot odds calculation decision-making
+- ✅ Position-aware strategy
+  - Early Position: Cautious and conservative
+  - Middle Position: Balanced strategy
+  - Late Position: Aggressive and proactive, occasional bluffing
+- ✅ Intelligent betting decisions
+  - Strong hands (>0.75): Bold raises
+  - Medium hands (0.5-0.75): Call based on pot odds
+  - Medium-weak hands (0.3-0.5): Small bet calls
+  - Weak hands (<0.3): Fold or bluff
+
+**3. Sound System 🔊**
+- ✅ Web Audio API implementation
+- ✅ 15+ game sound effects
+  - Dealing, betting, chip sounds
+  - Fold/Check/Call/Raise/All-in sound effects
+  - Win/loss sound effects
+  - Alert/notification/error sound effects
+- ✅ Sound toggle button (🔊/🔇)
+- ✅ Volume adjustment (0-1)
+- ✅ LocalStorage save settings
+- ✅ Game event auto-trigger sound effects
+
+**4. Achievement System 🏆**
+- ✅ 17 achievements, 5 categories
+  - Beginner achievements: First game, Experienced, Master, etc.
+  - Victory achievements: First win, Frequent winner, Champion, etc.
+  - Win rate achievements: Lucky streak, Hot hand
+  - Chip achievements: Collector, High roller, Millionaire
+  - Special achievements: All-in King, Bluff Master, Comeback King
+- ✅ Backend achievement tracking
+  - Database achievements column (JSON format)
+  - Auto-detect unlock conditions
+  - Achievement reward distribution (100-10,000 chips)
+- ✅ Frontend achievement notifications
+  - Real-time popup notifications
+  - Sound feedback
+  - Game log recording
+
+**5. Unit Tests ✅**
+- ✅ Created PokerGame.test.js
+- ✅ 40+ test cases covering:
+  - Card class (Creation, value calculation, string representation)
+  - Deck class (Shuffle, deal, reset)
+  - Player management (Add, remove, count, AI)
+  - Game flow (Start, deal, blinds, actions)
+  - Hand evaluation (Pairs, two pairs, three of a kind, flush, full house, four of a kind)
+  - Game state (State retrieval, end judgment)
+  - AI decisions (Decision generation, hand strength calculation)
+
+**Technical File List**:
+- `backend/src/socket/gameSocket.js` - Chat and achievement event handling
+- `backend/src/services/PokerGame.js` - Enhanced AI strategy
+- `backend/src/services/achievements.js` - Achievement definitions and detection
+- `backend/src/models/User.js` - Achievement database methods
+- `backend/src/models/database.js` - Added achievements column
+- `frontend/src/services/socket.js` - Chat message sending
+- `frontend/src/services/sound.js` - Sound service (new file)
+- `frontend/src/views/Game.vue` - Chat UI, sound integration, achievement notifications
+- `backend/src/services/PokerGame.test.js` - Unit tests (new file)
+
+**Result**: All 5 major feature enhancements completed, game experience significantly improved!
 
 ---
 
-## 🎉 项目总结
+## 📚 Related Documentation
 
-### 已实现的目标
+- **Project Description**: README.md
+- **Development Guide**: CLAUDE.md
+- **API Documentation**: Visit http://localhost:3001/api/health
+- **Game Rules**: Standard Texas Hold'em rules
+
+---
+
+## 🎉 Project Summary
+
+### Achieved Goals
 ✅ "I want the end result to be an online web game that can be played directly, supporting multiplayer mode and also single-player mode (with a simple AI strategy)."
 
-### 项目成就
-- ✅ 完整的全栈Web应用
-- ✅ 实时多人游戏支持
-- ✅ 高级智能AI对手（手牌评估 + 赔率计算 + 位置策略）
-- ✅ 专业级UI设计
-- ✅ 完整的游戏规则实现
-- ✅ 用户系统和数据持久化
-- ✅ 实时聊天系统
-- ✅ 动态音效系统（Web Audio API）
-- ✅ 成就系统（17个成就 + 奖励机制）
-- ✅ 完整的单元测试覆盖
+### Project Achievements
+- ✅ Complete full-stack web application
+- ✅ Real-time multiplayer game support
+- ✅ Advanced intelligent AI opponent (Hand evaluation + Pot odds calculation + Position strategy)
+- ✅ Professional-grade UI design
+- ✅ Complete game rules implementation
+- ✅ User system and data persistence
+- ✅ Real-time chat system
+- ✅ Dynamic sound system (Web Audio API)
+- ✅ Achievement system (17 achievements + Reward mechanism)
+- ✅ Complete unit test coverage
 
-### 下一步
-游戏已完全可玩！您可以:
-1. 邀请朋友一起玩
-2. 继续优化和添加新功能
-3. 部署到生产环境
-4. 添加更多游戏模式
+### Next Steps
+The game is fully playable! You can:
+1. Invite friends to play together
+2. Continue optimizing and adding new features
+3. Deploy to production environment
+4. Add more game modes
 
-**祝您游戏愉快！🎰♠️♥️♣️♦️**
+**Enjoy the game! 🎰♠️♥️♣️♦️**

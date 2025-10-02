@@ -1,255 +1,253 @@
 <template>
-  <div class="game">
-    <!-- Game Header -->
-    <header class="game-header">
-      <div class="game-info">
-        <h1 class="game-title">Texas Hold'em</h1>
-        <div class="room-details">
-          <span class="room-id">Room: {{ gameStore.roomId || 'N/A' }}</span>
-          <span class="blinds">Blinds: ${{ gameStore.smallBlind }}/${{ gameStore.bigBlind }}</span>
-          <span class="seats">Seats: {{ gameStore.players.length }}/{{ gameStore.desiredSeatCount }}</span>
+  <div class="game-screen" :class="[`phase-${gameStore.gamePhase}`]">
+    <header class="top-bar">
+      <div class="room-info">
+        <h1>Texas Hold'em</h1>
+        <div class="meta-row">
+          <span class="meta-pill">Room {{ gameStore.roomId || 'N/A' }}</span>
+          <span class="meta-pill">Blinds ${{ gameStore.smallBlind }}/{{ gameStore.bigBlind }}</span>
+          <span class="meta-pill">{{ gameStore.players.length }} / {{ gameStore.desiredSeatCount }} players</span>
+        </div>
+        <div class="meta-row secondary">
+          <span class="meta-pill">Dealer: {{ dealerName }}</span>
+          <span class="meta-pill">Phase: {{ phaseLabel }}</span>
+          <span class="meta-pill" v-if="gameStore.currentBet > 0">Current bet ${{ gameStore.currentBet }}</span>
         </div>
       </div>
-      <div class="user-controls">
-        <div class="user-identity">
-          <span class="username">{{ userStore.username }}</span>
-          <span v-if="gameStore.isRoomCreator" class="user-role">Host</span>
+
+      <div class="control-cluster">
+        <button class="btn icon-btn" @click="toggleSound" :aria-pressed="soundEnabled">
+          <span>{{ soundEnabled ? '??' : '??' }}</span>
+        </button>
+        <button class="btn" @click="resetGame" v-if="gameStore.gamePhase !== 'waiting'">Restart</button>
+        <button class="btn danger" @click="leaveGame">Leave</button>
+      </div>
+
+      <div class="account-panel">
+        <div class="account-name">
+          <span>{{ userStore.username }}</span>
+          <small>ID: {{ userStore.user?.id || '?' }}</small>
         </div>
-        <div class="control-buttons">
-          <div
-            v-if="gameStore.isRoomCreator && gameStore.gamePhase === 'waiting'"
-            class="player-seat-controls"
-          >
-            <button
-              class="btn btn-minimal"
-              @click="decreaseSeats"
-              :disabled="seatDecreaseDisabled"
-              title="Decrease seats"
-            >
-              -
-            </button>
-            <span class="seat-count">Seats {{ gameStore.desiredSeatCount }}</span>
-            <span class="ai-count">AI {{ aiPlayerCount }}</span>
-            <button
-              class="btn btn-minimal"
-              @click="increaseSeats"
-              :disabled="seatIncreaseDisabled"
-              title="Increase seats"
-            >
-              +
-            </button>
-          </div>
-          <button
-            v-if="gameStore.gamePhase === 'waiting' && gameStore.isRoomCreator"
-            class="btn btn-success"
-            @click="startGame"
-            :disabled="!gameStore.canStartGame"
-          >
-            Start Game ({{ gameStore.players.length }}/{{ gameStore.desiredSeatCount }})
-          </button>
-          <span
-            v-if="gameStore.gamePhase === 'waiting' && !gameStore.isRoomCreator"
-            class="waiting-status"
-          >
-            Waiting for host to start…
-          </span>
-          <button
-            class="btn"
-            :class="soundEnabled ? 'btn-primary' : 'btn-secondary'"
-            @click="toggleSound"
-            title="Toggle sound effects"
-          >
-            {{ soundEnabled ? '🔊' : '🔇' }}
-          </button>
-          <button
-            v-if="gameStore.gamePhase !== 'waiting'"
-            class="btn btn-warning"
-            @click="resetGame"
-          >
-            Restart
-          </button>
-          <button class="btn btn-danger" @click="leaveGame">Leave</button>
-          <button class="btn btn-outline" @click="handleLogout">Logout</button>
+        <div class="account-chips">${{ formattedChips }}</div>
+        <div class="account-stats">
+          <span>Games {{ userStore.gamesPlayed }}</span>
+          <span>Wins {{ userStore.gamesWon }}</span>
+          <span>Win rate {{ userStore.winRate }}%</span>
         </div>
       </div>
     </header>
 
-    <!-- Main Game Area -->
-    <main class="game-main">
-      <!-- Poker Table Container -->
-      <section class="table-container">
-        <!-- Pot Display (upper left) -->
-        <div class="pot-display-corner">
-          <div class="pot-amount">Pot: ${{ gameStore.totalPot }}</div>
-          <div class="current-bet" v-if="gameStore.currentBet > 0">Current Bet: ${{ gameStore.currentBet }}</div>
+    <transition name="phase-banner">
+      <div v-if="showPhaseBanner" class="phase-banner">
+        <div class="phase-banner-content">
+          <h2>{{ phaseBannerText }}</h2>
+          <p v-if="phaseBannerSubtext">{{ phaseBannerSubtext }}</p>
         </div>
+      </div>
+    </transition>
 
-        <div class="poker-table" ref="pokerTableRef">
-          <!-- Community Cards Area -->
-          <div class="community-area">
-            <div class="community-cards">
-              <div
-                v-for="(card, index) in gameStore.communityCards"
-                :key="`community-${index}`"
-                class="game-card community-card"
+    <main class="content">
+      <section class="table-area">
+        <div class="table-felt">
+          <div class="table-glow"></div>
+
+          <div class="pot-info">
+            <span class="label">Pot</span>
+            <span class="value">${{ gameStore.totalPot }}</span>
+            <span class="call" v-if="callAmount > 0">To call ${{ callAmount }}</span>
+          </div>
+
+          <div class="community-row">
+            <div
+              v-for="(card, index) in paddedCommunityCards"
+              :key="`community-${index}`"
+              class="card-slot"
+              :class="{ revealed: !!card }"
+            >
+              <span
+                v-if="card"
+                class="card-face"
+                :class="getCardColor(card.suit)"
               >
-                <span :class="getCardColor(card.suit)">
-                  {{ card.suit }}{{ card.rank }}
-                </span>
-              </div>
+                {{ card.suit }}{{ card.rank }}
+              </span>
             </div>
           </div>
 
-          <!-- Players Around Table -->
-          <div class="players-container">
+          <div
+            v-if="dealerIndex !== -1 && tablePlayers.length"
+            class="dealer-chip"
+            :class="seatClasses[dealerIndex % seatClasses.length]"
+          >
+            D
+          </div>
+
+          <div class="player-layer">
             <div
-              v-for="(player, index) in gameStore.players"
+              v-for="(player, index) in tablePlayers"
               :key="player.id"
-              class="player-seat"
-              :class="{
-                'active-player': index === gameStore.currentPlayerIndex,
-                'folded-player': player.folded,
-                'all-in-player': player.allIn,
-                'current-user': player.id === userStore.user?.id
-              }"
-              :style="getPlayerPosition(index)"
+              class="seat"
+              :class="[
+                seatClasses[index % seatClasses.length],
+                {
+                  me: player.id === userStore.user?.id,
+                  active: player.id === currentTurnPlayerId,
+                  folded: player.folded,
+                  allin: player.allIn
+                }
+              ]"
             >
-              <!-- Player Avatar -->
-              <div class="player-avatar">
-                <div class="avatar-image">
-                  <span class="avatar-initial">{{ player.name.charAt(0).toUpperCase() }}</span>
-                  <span v-if="player.isAI" class="ai-badge">AI</span>
+              <div class="seat-frame">
+                <div class="seat-header">
+                  <span class="name">{{ player.name }}</span>
+                  <span class="chips">${{ player.chips }}</span>
                 </div>
-              </div>
-
-              <!-- Player Info -->
-              <div class="player-details">
-                <div class="player-name">{{ player.name }}</div>
-                <div class="player-chips">${{ player.chips }}</div>
-                <div class="player-status" v-if="player.folded">
-                  <span class="fold-indicator">FOLDED</span>
+                <div class="seat-body">
+                  <div class="last-action" v-if="player.lastAction && !player.folded">
+                    {{ formatPlayerAction(player.lastAction) }}
+                  </div>
+                  <div class="bet-stack" v-if="player.currentBet > 0 && !player.folded">
+                    Bet ${{ player.currentBet }}
+                  </div>
                 </div>
-                <div class="player-action" v-else-if="player.lastAction && !player.folded">
-                  {{ getActionText(player.lastAction) }}
-                </div>
-                <div class="player-bet" v-if="player.currentBet > 0 && !player.folded">
-                  ${{ player.currentBet }}
-                </div>
-              </div>
-
-              <!-- Player Cards -->
-              <div class="player-cards" v-if="player.cards && player.cards.length > 0">
-                <div
-                  v-for="(card, cardIndex) in player.cards"
-                  :key="`${player.id}-card-${cardIndex}`"
-                  class="game-card player-card"
-                  :class="{
-                    'own-card': player.id === userStore.user?.id,
-                    'opponent-card': player.id !== userStore.user?.id,
-                    'card-back': player.id !== userStore.user?.id && !card.revealed,
-                    'revealed': player.id === userStore.user?.id || card.revealed
-                  }"
-                >
-                  <span v-if="player.id === userStore.user?.id || card.revealed" :class="getCardColor(card.suit)">
-                    {{ card.suit }}{{ card.rank }}
-                  </span>
+                <div class="hole-cards">
+                  <div
+                    v-for="n in 2"
+                    :key="`hole-${player.id}-${n}`"
+                    class="card-slot"
+                    :class="{ revealed: shouldRevealPlayerCard(player, n - 1) }"
+                  >
+                    <span
+                      v-if="shouldRevealPlayerCard(player, n - 1)"
+                      class="card-face"
+                      :class="getCardColor(player.cards[n - 1]?.suit)"
+                    >
+                      {{ player.cards[n - 1]?.suit }}{{ player.cards[n - 1]?.rank }}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
+
+            <div v-if="!tablePlayers.length" class="empty-state">
+              Waiting for players to join?
+            </div>
+          </div>
+        </div>
+
+        <div class="table-footer">
+          <div class="host-controls" v-if="gameStore.isRoomCreator">
+            <div class="seat-controls" v-if="gameStore.gamePhase === 'waiting'">
+              <button class="btn light" @click="decreaseSeats" :disabled="seatDecreaseDisabled">-</button>
+              <span>{{ gameStore.desiredSeatCount }} seats</span>
+              <button class="btn light" @click="increaseSeats" :disabled="seatIncreaseDisabled">+</button>
+            </div>
+            <div class="ai-controls" v-if="gameStore.gamePhase === 'waiting'">
+              <button class="btn success" @click="addAI" :disabled="gameStore.players.length >= gameStore.desiredSeatCount">
+                Add AI
+              </button>
+              <button class="btn warning" @click="removeAI" :disabled="gameStore.aiPlayerCount === 0">
+                Remove AI
+              </button>
+            </div>
+            <button class="btn primary" @click="startGame" :disabled="!gameStore.canStartGame">
+              {{ gameStore.gamePhase === 'waiting' ? 'Start Game' : 'Deal Next Hand' }}
+            </button>
+          </div>
+          <div class="waiting-banner" v-else-if="gameStore.gamePhase === 'waiting'">
+            Waiting for the host to start the game?
           </div>
         </div>
       </section>
 
-      <!-- Side Panel -->
-      <aside class="side-panel">
-        <!-- Action Panel -->
-        <section class="action-panel" v-if="gameStore.isMyTurn">
-          <h3 class="panel-title">Your Turn</h3>
-
-          <!-- Primary Actions -->
-          <div class="primary-actions">
-            <button class="action-btn fold-btn" @click="fold">
-              <span class="btn-label">FOLD</span>
-              <span class="btn-desc">Fold</span>
+      <aside class="sidebar">
+        <section class="action-panel" :class="{ inactive: !gameStore.isMyTurn }">
+          <h3>Actions</h3>
+          <div class="action-buttons">
+            <button class="btn ghost" @click="fold" :disabled="!gameStore.isMyTurn">Fold</button>
+            <button class="btn ghost" @click="checkOrCall" :disabled="!gameStore.isMyTurn">
+              {{ canCheck ? 'Check' : `Call $${callAmount}` }}
             </button>
-
-            <button
-              class="action-btn call-btn"
-              @click="canCheck ? check() : call()"
-            >
-              <span class="btn-label">{{ canCheck ? 'CHECK' : 'CALL' }}</span>
-              <span class="btn-desc">
-                {{ canCheck ? 'Check' : `Call $${callAmount}` }}
-              </span>
+            <button class="btn primary" @click="openRaisePanel" :disabled="!canRaise">
+              Raise
             </button>
-
-            <button
-              class="action-btn raise-btn"
-              @click="showRaiseDialog = true"
-            >
-              <span class="btn-label">RAISE</span>
-              <span class="btn-desc">Raise</span>
-            </button>
-
-            <button class="action-btn allin-btn" @click="allIn">
-              <span class="btn-label">ALL-IN</span>
-              <span class="btn-desc">All-in</span>
-            </button>
+            <button class="btn danger" @click="allIn" :disabled="!gameStore.isMyTurn">All-in</button>
           </div>
 
-          <!-- Raise Dialog -->
-          <div v-if="showRaiseDialog" class="raise-dialog">
-            <h4>Raise Amount</h4>
-            <input
-              v-model.number="raiseAmount"
-              type="number"
-              :min="gameStore.minRaise"
-              :max="gameStore.myPlayer?.chips"
-              class="raise-input"
-            />
-            <div class="raise-actions">
-              <button @click="showRaiseDialog = false" class="btn btn-secondary">Cancel</button>
-              <button @click="raise" class="btn btn-primary">Confirm Raise</button>
+          <transition name="raise-panel">
+            <div v-if="showRaisePanel" class="raise-panel">
+              <header>
+                <span>Raise Amount</span>
+                <button class="icon-btn" @click="closeRaisePanel">?</button>
+              </header>
+              <div class="slider-row">
+                <input
+                  type="range"
+                  :min="Math.min(minRaiseValue, maxRaiseValue)"
+                  :max="maxRaiseValue"
+                  step="1"
+                  v-model.number="raiseAmount"
+                />
+                <div class="slider-value">${{ raiseAmount }}</div>
+              </div>
+              <div class="quick-raise">
+                <button class="btn light" @click="setRaiseFraction(0.25)">+25%</button>
+                <button class="btn light" @click="setRaiseFraction(0.5)">+50%</button>
+                <button class="btn light" @click="setRaiseFraction(1)">Pot</button>
+                <button class="btn light" @click="setRaiseAllIn">All-in</button>
+              </div>
+              <button class="btn primary full" @click="confirmRaise">Confirm Raise</button>
+            </div>
+          </transition>
+        </section>
+
+        <section class="info-panel">
+          <h3>Table Snapshot</h3>
+          <ul>
+            <li><span>Phase</span><span>{{ phaseLabel }}</span></li>
+            <li><span>Dealer</span><span>{{ dealerName }}</span></li>
+            <li><span>Your stack</span><span>${{ myStack }}</span></li>
+            <li><span>Minimum raise</span><span>${{ Math.min(minRaiseValue, maxRaiseValue) }}</span></li>
+          </ul>
+        </section>
+
+        <section class="log-panel">
+          <h3>Game Log</h3>
+          <div class="log-scroll">
+            <div v-for="(entry, index) in gameLogs" :key="`log-${index}`" class="log-entry">
+              {{ entry }}
             </div>
           </div>
         </section>
 
-        <!-- Chat Panel -->
         <section class="chat-panel">
-          <h3 class="panel-title">Chat</h3>
-          <div class="chat-messages">
-            <div v-for="(msg, index) in chatMessages" :key="index" class="chat-message" :class="{ 'own-message': msg.userId === userStore.user?.id }">
-              <span class="chat-username">{{ msg.username }}:</span>
-              <span class="chat-text">{{ msg.message }}</span>
+          <h3>Table Chat</h3>
+          <div class="chat-scroll">
+            <div
+              v-for="(msg, index) in chatMessages"
+              :key="`chat-${index}`"
+              class="chat-line"
+              :class="{ mine: msg.userId === userStore.user?.id }"
+            >
+              <span class="user">{{ msg.username }}</span>
+              <span class="message">{{ msg.message }}</span>
             </div>
           </div>
-          <div class="chat-input-container">
+          <div class="chat-input-row">
             <input
-              v-model="chatInput"
-              @keyup.enter="sendChatMessage"
               type="text"
-              placeholder="Type message..."
-              class="chat-input"
-              maxlength="200"
+              v-model="chatInput"
+              placeholder="Say something?"
+              maxlength="150"
+              @keyup.enter="sendChatMessage"
             />
-            <button @click="sendChatMessage" class="btn btn-primary chat-send-btn">Send</button>
-          </div>
-        </section>
-
-        <!-- Game Log -->
-        <section class="game-log">
-          <h3 class="panel-title">Game Log</h3>
-          <div class="log-entries">
-            <div v-for="(log, index) in gameLogs" :key="index" class="log-entry">
-              {{ log }}
-            </div>
+            <button class="btn primary" @click="sendChatMessage">Send</button>
           </div>
         </section>
       </aside>
     </main>
   </div>
 </template>
-
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -268,14 +266,15 @@ const roomIdParam = ref(route.query.roomId || 'default-room')
 const MAX_SEATS = 6
 const MIN_SEATS = 3
 
-// UI state
-const pokerTableRef = ref(null)
-const showRaiseDialog = ref(false)
+const showRaisePanel = ref(false)
 const raiseAmount = ref(0)
 const gameLogs = ref([])
 const chatMessages = ref([])
 const chatInput = ref('')
 const soundEnabled = ref(soundService.enabled)
+const showPhaseBanner = ref(false)
+const phaseBannerText = ref('')
+const phaseBannerSubtext = ref('')
 
 const hasJoinedRoom = ref(false)
 const socketListeners = []
@@ -292,12 +291,78 @@ const cleanupSocketListeners = () => {
   socketListeners.length = 0
 }
 
-// Computed properties
-const canCheck = computed(() => gameStore.currentBet === 0)
-const callAmount = computed(() => {
-  if (!gameStore.myPlayer) return 0
-  return gameStore.currentBet - (gameStore.myPlayer.currentBet || 0)
+const seatClasses = ['seat-0', 'seat-1', 'seat-2', 'seat-3', 'seat-4', 'seat-5']
+
+const tablePlayers = computed(() => gameStore.players || [])
+const dealerIndex = computed(() => (typeof gameStore.dealerIndex === 'number' ? gameStore.dealerIndex : -1))
+const dealerName = computed(() => {
+  if (dealerIndex.value < 0 || dealerIndex.value >= tablePlayers.value.length) {
+    return '—'
+  }
+  return tablePlayers.value[dealerIndex.value]?.name || '—'
 })
+
+const paddedCommunityCards = computed(() => {
+  const cards = gameStore.communityCards ? [...gameStore.communityCards] : []
+  while (cards.length < 5) {
+    cards.push(null)
+  }
+  return cards
+})
+
+const currentTurnPlayerId = computed(() => {
+  if (gameStore.currentPlayerIndex == null || gameStore.currentPlayerIndex < 0) {
+    return null
+  }
+  return tablePlayers.value[gameStore.currentPlayerIndex]?.id || null
+})
+
+const callAmount = computed(() => {
+  const player = gameStore.myPlayer
+  if (!player) return 0
+  const target = (gameStore.currentBet || 0) - (player.currentBet || 0)
+  return target > 0 ? Math.round(target) : 0
+})
+
+const canCheck = computed(() => callAmount.value === 0)
+const canRaise = computed(() => gameStore.isMyTurn && (gameStore.myPlayer?.chips || 0) > 0)
+
+const maxRaiseValue = computed(() => Math.max(0, gameStore.myPlayer?.chips || 0))
+
+const minRaiseValue = computed(() => {
+  const chips = maxRaiseValue.value
+  if (chips <= 0) return 0
+  const call = callAmount.value
+  const base = Math.max(gameStore.minRaise || gameStore.bigBlind || 1, 1)
+  const required = call + base
+  if (required >= chips) {
+    return chips
+  }
+  return required
+})
+
+const formattedChips = computed(() => (userStore.chips || 0).toLocaleString())
+const myStack = computed(() => gameStore.myPlayer?.chips ?? 0)
+
+const phaseNames = {
+  waiting: 'Waiting',
+  preflop: 'Pre-Flop',
+  flop: 'Flop',
+  turn: 'Turn',
+  river: 'River',
+  showdown: 'Showdown'
+}
+
+const phaseDescriptions = {
+  waiting: 'Gather players before dealing.',
+  preflop: 'Players act on their hole cards.',
+  flop: 'Three community cards reveal the board.',
+  turn: 'The turn card changes the possibilities.',
+  river: 'Final community card before the showdown.',
+  showdown: 'Reveal hands to determine the winner.'
+}
+
+const phaseLabel = computed(() => phaseNames[gameStore.gamePhase] || (gameStore.gamePhase || '').toUpperCase())
 
 const aiPlayerCount = computed(() => gameStore.aiPlayerCount)
 const seatDecreaseDisabled = computed(() => {
@@ -306,107 +371,180 @@ const seatDecreaseDisabled = computed(() => {
 })
 const seatIncreaseDisabled = computed(() => gameStore.desiredSeatCount >= MAX_SEATS)
 
-// Methods
-const getPlayerPosition = (index) => {
-  if (!pokerTableRef.value) {
-    return { transform: 'translate(0px, 0px)' }
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
+
+watch(showRaisePanel, (visible) => {
+  if (visible) {
+    const chips = maxRaiseValue.value
+    if (chips <= 0) {
+      raiseAmount.value = 0
+      return
+    }
+    const base = Math.min(minRaiseValue.value || chips, chips)
+    raiseAmount.value = base || chips
   }
+})
 
-  const container = pokerTableRef.value
-  const containerRect = container.getBoundingClientRect()
-  const containerWidth = containerRect.width || 600
-  const containerHeight = containerRect.height || 400
+watch(
+  () => gameStore.isMyTurn,
+  (isMyTurn) => {
+    if (!isMyTurn) {
+      showRaisePanel.value = false
+    }
+  }
+)
 
-  const totalPlayers = Math.max(gameStore.players.length, 1)
-  const myPlayerId = userStore.user?.id
-  const myIndex = gameStore.players.findIndex((player) => player.id === myPlayerId)
-  const relativeIndex = myIndex >= 0
-    ? (index - myIndex + totalPlayers) % totalPlayers
-    : index
-  const baseAngle = (Math.PI * 2 * relativeIndex) / totalPlayers
-  const angleOffset = myIndex >= 0 ? Math.PI / 2 : -Math.PI / 2
-  const angle = baseAngle + angleOffset
+watch(
+  () => [callAmount.value, minRaiseValue.value, maxRaiseValue.value],
+  () => {
+    if (!showRaisePanel.value) return
+    const chips = maxRaiseValue.value
+    if (chips <= 0) {
+      raiseAmount.value = 0
+      return
+    }
+    const min = Math.min(minRaiseValue.value || chips, chips)
+    raiseAmount.value = clamp(raiseAmount.value || min, min || 1, chips)
+  }
+)
 
-  const radiusX = Math.min(containerWidth * 0.4, 320)
-  const radiusY = Math.min(containerHeight * 0.32, 190)
+const getCardColor = (suit) => (suit === '♥' || suit === '♦' ? 'red' : 'black')
 
-  const x = Math.cos(angle) * radiusX
-  const y = Math.sin(angle) * radiusY
+const formatPlayerAction = (action) => {
+  const key = typeof action === 'string' ? action : action?.action || action?.type
+  if (!key) return ''
+  const map = {
+    call: 'Called',
+    raise: 'Raised',
+    bet: 'Bet',
+    fold: 'Folded',
+    check: 'Checked',
+    all_in: 'All-in',
+    small_blind: 'Posted small blind',
+    big_blind: 'Posted big blind'
+  }
+  const label = map[key] || key.toUpperCase()
+  const amount = typeof action === 'object' && action?.amount ? ` $${action.amount}` : ''
+  return `${label}${amount}`
+}
 
-  return {
-    transform: `translate(${x}px, ${y}px)`,
-    zIndex: Math.round(200 + y)
+const shouldRevealPlayerCard = (player, index) => {
+  if (!player || !player.cards || !player.cards[index]) return false
+  if (player.id === userStore.user?.id) return true
+  if (gameStore.gamePhase === 'showdown' && !player.folded) return true
+  return !!player.cards[index].revealed
+}
+
+const addLog = (message) => {
+  const timestamp = new Date().toLocaleTimeString()
+  gameLogs.value.unshift(`[${timestamp}] ${message}`)
+  if (gameLogs.value.length > 80) {
+    gameLogs.value.pop()
   }
 }
 
-const getCardColor = (suit) => {
-  if (suit === '♥' || suit === '♦') {
-    return 'red-suit'
-  } else {
-    return 'black-suit'
-  }
-}
-
-const getActionText = (action) => {
-  const actionMap = {
-    'call': 'CALL',
-    'raise': 'RAISE',
-    'fold': 'FOLD',
-    'check': 'CHECK',
-    'all_in': 'ALL-IN',
-    'bet': 'BET'
-  }
-  return actionMap[action] || action.toUpperCase()
-}
-
-// Game actions
 const fold = () => {
+  if (!gameStore.isMyTurn) return
   soundService.playFold()
   gameStore.sendAction('fold')
-  addLog('You chose to fold')
+  addLog('You folded')
 }
 
-const check = () => {
-  soundService.playCheck()
-  gameStore.sendAction('check')
-  addLog('You chose to check')
+const checkOrCall = () => {
+  if (!gameStore.isMyTurn) return
+  if (canCheck.value) {
+    soundService.playCheck()
+    gameStore.sendAction('check')
+    addLog('You checked')
+  } else {
+    soundService.playCall()
+    gameStore.sendAction('call')
+    addLog(`You called $${callAmount.value}`)
+  }
 }
 
-const call = () => {
-  soundService.playCall()
-  gameStore.sendAction('call')
-  addLog(`You called $${callAmount.value}`)
+const openRaisePanel = () => {
+  if (!canRaise.value) return
+  soundService.playClick()
+  showRaisePanel.value = true
+  const chips = maxRaiseValue.value
+  if (chips <= 0) {
+    raiseAmount.value = 0
+    return
+  }
+  const base = Math.min(minRaiseValue.value || chips, chips)
+  raiseAmount.value = base || chips
 }
 
-const raise = () => {
-  if (raiseAmount.value < gameStore.minRaise) {
+const closeRaisePanel = () => {
+  showRaisePanel.value = false
+}
+
+const setRaiseFraction = (fraction) => {
+  const chips = maxRaiseValue.value
+  if (chips <= 0) return
+  const call = callAmount.value
+  const additional = Math.max(chips - call, 0) * fraction
+  const target = Math.round(call + additional)
+  const min = Math.min(minRaiseValue.value || chips, chips)
+  raiseAmount.value = clamp(target || min, min || 1, chips)
+}
+
+const setRaiseAllIn = () => {
+  raiseAmount.value = maxRaiseValue.value
+}
+
+const confirmRaise = () => {
+  if (!gameStore.isMyTurn) return
+  const chips = maxRaiseValue.value
+  if (chips <= 0) {
     soundService.playError()
-    ElMessage.error(`Minimum raise amount is $${gameStore.minRaise}`)
+    ElMessage.error('Not enough chips to raise')
+    return
+  }
+  const min = Math.min(minRaiseValue.value || chips, chips)
+  const amount = Math.round(clamp(raiseAmount.value || min, min || 1, chips))
+  if (amount < callAmount.value && amount < chips) {
+    soundService.playError()
+    ElMessage.error('Raise amount is too small')
     return
   }
   soundService.playRaise()
-  gameStore.sendAction('raise', raiseAmount.value)
-  addLog(`You raised $${raiseAmount.value}`)
-  showRaiseDialog.value = false
+  gameStore.sendAction('raise', amount)
+  addLog(`You raised to $${amount}`)
+  showRaisePanel.value = false
 }
 
 const allIn = () => {
+  if (!gameStore.isMyTurn) return
   soundService.playAllIn()
   gameStore.sendAction('all_in')
-  addLog('You went all-in!')
+  addLog('You went all-in')
+  showRaisePanel.value = false
 }
 
 const startGame = () => {
   soundService.playGameStart()
   gameStore.startGame()
-  addLog('Game started!')
+  addLog('Game started')
+}
+
+const addAI = () => {
+  soundService.playClick()
+  gameStore.addAI()
+  addLog('AI player added')
+}
+
+const removeAI = () => {
+  soundService.playClick()
+  gameStore.removeAI()
+  addLog('AI player removed')
 }
 
 const resetGame = () => {
   if (gameStore.gamePhase === 'waiting') {
     return
   }
-
   soundService.playClick()
   gameStore.resetGame()
   addLog('Game reset')
@@ -428,18 +566,11 @@ const handleLogout = () => {
   router.push('/login')
 }
 
-const addLog = (message) => {
-  gameLogs.value.unshift(`[${new Date().toLocaleTimeString()}] ${message}`)
-  if (gameLogs.value.length > 50) {
-    gameLogs.value.pop()
-  }
-}
-
 const sendChatMessage = () => {
   if (!chatInput.value || chatInput.value.trim().length === 0) {
     return
   }
-  socketService.sendChatMessage(chatInput.value)
+  socketService.sendChatMessage(chatInput.value.trim())
   chatInput.value = ''
 }
 
@@ -455,7 +586,6 @@ const increaseSeats = () => {
   if (seatIncreaseDisabled.value) {
     return
   }
-
   soundService.playClick()
   gameStore.setAICount(Math.min(gameStore.desiredSeatCount + 1, MAX_SEATS))
 }
@@ -465,7 +595,6 @@ const decreaseSeats = () => {
   if (seatDecreaseDisabled.value) {
     return
   }
-
   soundService.playClick()
   const target = Math.max(minimumSeats, gameStore.desiredSeatCount - 1)
   gameStore.setAICount(target)
@@ -476,20 +605,16 @@ const joinCurrentRoom = () => {
   if (!targetRoom) {
     return
   }
-
   const status = socketService.getStatus()
   if (!status.authenticated) {
     return
   }
-
   if (!hasJoinedRoom.value) {
     gameLogs.value = []
     chatMessages.value = []
     gameStore.joinRoom(targetRoom)
     addLog('Connected to game server')
     hasJoinedRoom.value = true
-  } else {
-    socketService.joinRoom(targetRoom)
   }
 }
 
@@ -497,18 +622,15 @@ const ensureAuthenticated = () => {
   if (!userStore.token) {
     return
   }
-
   const status = socketService.getStatus()
   if (!status.connected) {
     socketService.connect()
     return
   }
-
   if (!status.authenticated) {
     socketService.authenticate(userStore.token)
     return
   }
-
   joinCurrentRoom()
 }
 
@@ -543,29 +665,44 @@ watch(
   }
 )
 
-// Socket event handlers
+const showPhaseTransition = (phase) => {
+  phaseBannerText.value = phaseNames[phase] || (phase || '').toUpperCase()
+  phaseBannerSubtext.value = phaseDescriptions[phase] || ''
+  showPhaseBanner.value = true
+  setTimeout(() => {
+    showPhaseBanner.value = false
+  }, 2000)
+}
+
 const setupSocketListeners = () => {
   const handlers = {
     game_update: (data) => {
+      if (data.gameState && data.gameState.phase && data.gameState.phase !== gameStore.gamePhase) {
+        showPhaseTransition(data.gameState.phase)
+      }
+
       if (data.lastAction) {
         const action = data.lastAction
-        addLog(`${action.playerName} ${getActionText(action.action)}${action.amount ? ` $${action.amount}` : ''}`)
-
-        if (action.action === 'fold') soundService.playFold()
-        else if (action.action === 'check') soundService.playCheck()
-        else if (action.action === 'call') soundService.playCall()
-        else if (action.action === 'bet' || action.action === 'raise') soundService.playRaise()
-        else if (action.action === 'all_in') soundService.playAllIn()
+        addLog(`${action.playerName || action.player || 'Player'} ${formatPlayerAction(action)}`)
+        const actionType = action.action || action.type
+        if (actionType === 'fold') soundService.playFold()
+        else if (actionType === 'check') soundService.playCheck()
+        else if (actionType === 'call') soundService.playCall()
+        else if (actionType === 'bet' || actionType === 'raise') soundService.playRaise()
+        else if (actionType === 'all_in') soundService.playAllIn()
       }
 
       if (gameStore.isMyTurn) {
         soundService.playYourTurn()
       }
     },
-    game_started: () => {
+    game_started: (data) => {
       soundService.playGameStart()
       soundService.playCardDeal()
-      addLog('游戏已开始！')
+      addLog('New hand started')
+      if (data?.gameState?.phase) {
+        showPhaseTransition(data.gameState.phase)
+      }
     },
     game_finished: (data) => {
       const winners =
@@ -576,8 +713,7 @@ const setupSocketListeners = () => {
       if (Array.isArray(winners) && winners.length > 0) {
         const winnerNames = winners.map((w) => w.name).join(', ')
         const potAmount = data?.pot ?? data?.results?.pot ?? 0
-        addLog(`游戏结束！获胜者: ${winnerNames} (奖池 ${potAmount})`)
-
+        addLog(`Hand finished. Winner(s): ${winnerNames} (Pot $${potAmount})`)
         const isWinner = winners.some((w) => w.id === userStore.user?.id)
         if (isWinner) {
           soundService.playWin()
@@ -585,7 +721,7 @@ const setupSocketListeners = () => {
           soundService.playLose()
         }
       } else {
-        addLog('本局结束，正在准备下一局...')
+        addLog('Hand finished. Preparing next hand…')
       }
     },
     player_joined: (data) => {
@@ -594,27 +730,26 @@ const setupSocketListeners = () => {
         return
       }
       soundService.playNotification()
-      addLog(`${name} 加入了游戏`)
+      addLog(`${name} joined the table`)
     },
     player_left: (data) => {
-      const name = (
+      const name =
         data?.player?.name ||
         data?.playerName ||
         gameStore.players.find((p) => p.id === data?.playerId)?.name ||
-        '一位玩家'
-      )
+        'A player'
       soundService.playNotification()
-      addLog(`${name} 离开了游戏`)
+      addLog(`${name} left the table`)
     },
     action_error: (data) => {
       soundService.playError()
       ElMessage.error(data.error)
-      addLog(`错误: ${data.error}`)
+      addLog(`Error: ${data.error}`)
     },
     error: (data) => {
       soundService.playError()
       ElMessage.error(data.error)
-      addLog(`错误: ${data.error}`)
+      addLog(`Error: ${data.error}`)
     },
     chat_message: (data) => {
       chatMessages.value.push({
@@ -630,21 +765,18 @@ const setupSocketListeners = () => {
     achievements_unlocked: (data) => {
       if (data.playerId === userStore.user?.id) {
         soundService.playSuccess()
-
         data.achievements.forEach((achievement, index) => {
           setTimeout(() => {
             ElMessage.success({
-              message: `🎉 成就解锁 ${achievement.icon} ${achievement.name}
-${achievement.description}
-奖励: ${achievement.reward} 筹码`,
+              message: `🎉 Achievement unlocked ${achievement.icon} ${achievement.name}\n${achievement.description}\nReward: ${achievement.reward} chips`,
               duration: 5000,
               showClose: true
             })
-            addLog(`解锁成就: ${achievement.name} (+${achievement.reward} 筹码)`)
+            addLog(`Achievement unlocked: ${achievement.name} (+${achievement.reward} chips)`)
           }, index * 1000)
         })
       } else {
-        addLog(`玩家解锁了 ${data.achievements.length} 个成就`)
+        addLog(`Another player unlocked ${data.achievements.length} achievement(s)`)
       }
     },
     authenticated: handleAuthenticated,
@@ -657,15 +789,13 @@ ${achievement.description}
   })
 }
 
-
-// Lifecycle
-onMounted(async () => {
+onMounted(() => {
   if (!userStore.isLoggedIn) {
     userStore.initFromStorage()
   }
 
   if (!userStore.isLoggedIn) {
-    ElMessage.error('请先登录')
+    ElMessage.error('Please login first')
     router.push('/login')
     return
   }
@@ -684,1550 +814,728 @@ onBeforeUnmount(() => {
   hasJoinedRoom.value = false
 })
 </script>
-
 <style scoped>
-/* Import CSS Custom Properties */
-.game {
-  height: 100vh;
-  max-height: 100vh;
-  background: var(--color-background);
-  padding: var(--space-md);
-  position: relative;
+* {
+  box-sizing: border-box;
+}
+
+.game-screen {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  color: var(--color-text-primary);
-  container-type: size;
-  overflow: hidden;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(59, 130, 246, 0.25), transparent 55%),
+    radial-gradient(circle at 82% 80%, rgba(139, 92, 246, 0.25), transparent 55%),
+    rgba(15, 23, 42, 0.93);
+  color: #f8fafc;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
 }
 
-/* Ambient Background Effects */
-.game::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: 
-    radial-gradient(circle at 20% 30%, rgba(245, 158, 11, 0.06) 0%, transparent 50%),
-    radial-gradient(circle at 80% 70%, rgba(31, 41, 55, 0.12) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* Header Styles */
-.game-header {
+.top-bar {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--space-lg);
-  background: var(--color-surface);
-  backdrop-filter: blur(20px);
-  border-radius: var(--border-radius-lg);
-  padding: var(--space-md) var(--space-lg);
-  margin-bottom: var(--space-md);
-  border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-lg);
-  position: relative;
-  z-index: 10;
-  flex-shrink: 0;
+  gap: 1.5rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(16px);
 }
 
-.game-title {
-  color: var(--color-text-primary);
+.room-info h1 {
   margin: 0;
-  font-size: var(--font-size-xl);
+  font-size: 1.75rem;
   font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: var(--line-height-tight);
+  letter-spacing: -0.02em;
 }
 
-.room-details {
+.meta-row {
   display: flex;
-  gap: var(--space-md);
-  margin-top: var(--space-xs);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  color: rgba(226, 232, 240, 0.8);
+  font-size: 0.85rem;
 }
 
-.room-id,
-.blinds {
+.meta-row.secondary {
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.25);
   font-weight: 500;
 }
 
-.user-controls {
+.control-cluster {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.account-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
-  align-items: flex-end;
+  gap: 0.35rem;
+  padding: 0.75rem 1rem;
+  background: rgba(30, 41, 59, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  min-width: 220px;
 }
 
-.user-identity {
+.account-name {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: var(--space-sm);
-}
-
-.username {
-  color: var(--color-text-primary);
   font-weight: 600;
-  font-size: var(--font-size-md);
+  font-size: 1rem;
 }
 
-.user-role {
-  background: var(--color-warning);
-  color: #1f2937;
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--border-radius-sm);
-  font-size: var(--font-size-xs);
+.account-name small {
+  color: rgba(148, 163, 184, 0.7);
+  font-weight: 500;
+}
+
+.account-chips {
+  font-size: 1.4rem;
   font-weight: 700;
+  color: #facc15;
 }
 
-.control-buttons {
+.account-stats {
   display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: rgba(203, 213, 225, 0.85);
 }
 
-.btn-outline {
-  background: transparent;
-  color: var(--color-text-primary);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  padding: var(--space-sm) var(--space-md);
-  transition: all var(--transition-base);
+.btn {
+  appearance: none;
+  border: none;
+  border-radius: 999px;
+  padding: 0.45rem 1.1rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  color: #f8fafc;
+  background: rgba(71, 85, 105, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
-.btn-outline:hover {
-  background: rgba(255, 255, 255, 0.12);
-  transform: translateY(-2px);
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 25px rgba(15, 23, 42, 0.3);
 }
 
-.btn-minimal {
-  background: transparent;
-  color: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: var(--space-xs) var(--space-sm);
-  font-size: var(--font-size-md);
-  transition: all var(--transition-base);
-}
-
-.btn-minimal:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-.btn-minimal:disabled {
-  opacity: 0.3;
+.btn:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
-.waiting-status {
-  color: var(--color-warning);
-  font-style: italic;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  padding: var(--space-xs) var(--space-sm);
-  align-self: center;
+.btn.primary {
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  border-color: rgba(148, 163, 184, 0.25);
 }
 
-/* Main Game Layout */
-.game-main {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-lg);
-  min-height: 0;
-  max-height: 100%;
-  position: relative;
-  z-index: 1;
-  overflow: hidden;
+.btn.primary:hover:not(:disabled) {
+  box-shadow: 0 18px 35px rgba(99, 102, 241, 0.4);
 }
 
-.table-container {
-  position: relative;
-  display: flex;
+.btn.danger {
+  background: linear-gradient(135deg, #f97316, #ef4444);
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.btn.success {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.btn.success:hover:not(:disabled) {
+  box-shadow: 0 18px 35px rgba(16, 185, 129, 0.4);
+}
+
+.btn.warning {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+.btn.warning:hover:not(:disabled) {
+  box-shadow: 0 18px 35px rgba(245, 158, 11, 0.4);
+}
+
+.btn.ghost {
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.btn.light {
+  background: rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
+  padding: 0.35rem 0.9rem;
+}
+
+.btn.icon-btn {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 0;
-  max-height: 100%;
-  overflow: hidden;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 1rem;
 }
 
-.pot-display-corner {
-  position: absolute;
-  top: var(--space-md);
-  left: var(--space-md);
-  z-index: 100;
-  background: rgba(31, 41, 55, 0.95);
-  backdrop-filter: blur(12px);
-  border-radius: var(--border-radius-lg);
-  padding: var(--space-md);
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  box-shadow: var(--shadow-lg);
-  min-width: clamp(120px, 15vw, 180px);
+.btn.full {
+  width: 100%;
 }
 
-.pot-display-corner .pot-amount {
-  color: var(--color-warning);
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 800;
-  font-size: clamp(1rem, 2.5vw, 1.4rem);
-  margin: 0;
-  text-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
-  letter-spacing: 0.5px;
-}
-
-.pot-display-corner .current-bet {
-  color: var(--color-text-primary);
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 600;
-  font-size: clamp(0.85rem, 2vw, 1rem);
-  margin-top: var(--space-xs);
-  opacity: 0.9;
-}
-
-.side-panel {
-  width: clamp(280px, 25vw, 320px);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  flex-shrink: 0;
-}
-
-/* Poker Table Styles */
-.poker-table {
-  position: relative;
-  width: clamp(500px, 80vw, 800px);
-  height: clamp(350px, 60vh, 500px);
-  aspect-ratio: 8 / 5;
-  background: 
-    radial-gradient(ellipse at center, #0b3d2e 0%, #083529 40%, #062e1a 80%);
-  border-radius: 50% / 35%;
-  border: clamp(4px, 1vw, 8px) solid #1f2937;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 
-    0 0 0 2px rgba(245, 158, 11, 0.3),
-    var(--shadow-lg),
-    inset 0 0 clamp(20px, 3vw, 40px) rgba(0, 0, 0, 0.4);
-  container-type: size;
-}
-
-.poker-table::before {
-  content: '';
-  position: absolute;
-  inset: calc(-1 * clamp(4px, 1vw, 8px));
-  background: linear-gradient(135deg, 
-    #1f2937 0%,
-    #374151 15%,
-    rgba(245, 158, 11, 0.3) 45%,
-    rgba(245, 158, 11, 0.5) 50%,
-    rgba(245, 158, 11, 0.3) 55%,
-    #374151 85%,
-    #1f2937 100%
-  );
-  border-radius: 50% / 35%;
-  z-index: -1;
-}
-
-.poker-table::after {
-  content: '';
-  position: absolute;
-  top: clamp(8px, 2vw, 16px);
-  left: clamp(12px, 3vw, 24px);
-  right: clamp(12px, 3vw, 24px);
-  bottom: clamp(8px, 2vw, 16px);
-  border: 1px dashed rgba(248, 250, 252, 0.15);
-  border-radius: 50% / 35%;
-  pointer-events: none;
-}
-
-/* Community Area */
-.community-area {
-  position: absolute;
+.phase-banner {
+  position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 10;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(99, 102, 241, 0.9));
+  padding: 2.25rem 3rem;
+  border-radius: 1.5rem;
+  box-shadow: 0 30px 70px rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  z-index: 80;
   text-align: center;
-}
-
-.community-cards {
-  display: flex;
-  gap: var(--space-sm);
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-
-
-/* Card Styles */
-.game-card {
-  width: clamp(32px, 4vw, 54px);
-  height: clamp(46px, 5.6vw, 76px);
-  aspect-ratio: var(--card-aspect-ratio);
-  background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
-  border-radius: var(--border-radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Montserrat', sans-serif;
-  font-size: clamp(0.8rem, 2vw, 1.3rem);
-  font-weight: 700;
-  box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  transition: all var(--transition-base);
-  position: relative;
-  transform-style: preserve-3d;
-}
-
-@media (hover: hover) {
-  .game-card:hover {
-    transform: translateY(-2px) scale(1.05);
-    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.95);
-  }
-}
-
-/* Card Animations */
-@keyframes deal-card {
-  0% {
-    transform: translateX(-200px) translateY(-100px) rotate(15deg) scale(0.8);
-    opacity: 0;
-  }
-  50% {
-    opacity: 0.7;
-  }
-  100% {
-    transform: translateX(0) translateY(0) rotate(0deg) scale(1);
-    opacity: 1;
-  }
-}
-
-.game-card.dealing {
-  animation: deal-card 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-@keyframes flip-card {
-  0% {
-    transform: rotateY(0deg);
-  }
-  50% {
-    transform: rotateY(90deg) scale(0.95);
-  }
-  100% {
-    transform: rotateY(0deg) scale(1);
-  }
-}
-
-.game-card.flipping {
-  animation: flip-card 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Deal Animation Delays */
-.community-cards .game-card:nth-child(1) { animation-delay: 0ms; }
-.community-cards .game-card:nth-child(2) { animation-delay: 50ms; }
-.community-cards .game-card:nth-child(3) { animation-delay: 100ms; }
-.community-cards .game-card:nth-child(4) { animation-delay: 200ms; }
-.community-cards .game-card:nth-child(5) { animation-delay: 250ms; }
-
-/* Card States */
-.player-card {
-  width: clamp(24px, 3vw, 42px);
-  height: clamp(34px, 4.2vw, 59px);
-  font-size: clamp(0.6rem, 1.5vw, 1rem);
-}
-
-.own-card {
-  width: clamp(32px, 4vw, 50px);
-  height: clamp(46px, 5.6vw, 70px);
-  background: #ffffff;
-  font-size: clamp(0.8rem, 2vw, 1.2rem);
-}
-
-.game-card.revealed,
-.community-card {
-  transform: rotateY(0deg);
-  background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
-}
-
-.game-card:not(.revealed):not(.community-card) {
-  background: #4a5568;
   color: #fff;
 }
 
-/* Card Back Design */
-.card-back {
-  background:
-    linear-gradient(140deg, #0ea5e9 0%, #6366f1 55%, #a855f7 100%),
-    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.3) 0%, transparent 60%);
-  background-size: 100% 100%, 22px 22px;
-  position: relative;
-  overflow: hidden;
-  color: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
-    0 6px 14px rgba(14, 165, 233, 0.25);
-}
-.card-back::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.18) 0%, transparent 55%),
-    radial-gradient(circle at 75% 75%, rgba(255, 255, 255, 0.16) 0%, transparent 55%);
-  opacity: 0.9;
-}
-.card-back::after {
-  content: '';
-  position: absolute;
-  inset: 4px;
-  border-radius: var(--border-radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.12) 0%, transparent 70%);
+.phase-banner-content h2 {
+  margin: 0;
+  font-size: 2.25rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-
-/* Players Layout */
-.players-container {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
+.phase-banner-content p {
+  margin: 0.75rem 0 0;
+  font-size: 0.95rem;
+  color: rgba(226, 232, 240, 0.85);
 }
 
-.player-seat {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: clamp(100px, 15vw, 160px);
-  height: clamp(80px, 12vw, 140px);
-  margin-left: clamp(-50px, -7.5vw, -80px);
-  margin-top: clamp(-40px, -6vw, -70px);
-  text-align: center;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-xs);
-  pointer-events: auto;
-  transition: all var(--transition-base);
+.phase-banner-enter-active {
+  animation: banner-in 0.4s ease-out;
 }
 
-/* Player Avatar */
-.player-avatar {
-  position: relative;
-  width: clamp(40px, 6vw, 60px);
-  height: clamp(40px, 6vw, 60px);
+.phase-banner-leave-active {
+  animation: banner-out 0.35s ease-in forwards;
 }
 
-.avatar-image {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
-  border: clamp(2px, 0.5vw, 3px) solid #4b5563;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  z-index: 2;
-  box-shadow: var(--shadow-md), inset 0 2px 4px rgba(255, 255, 255, 0.1);
-}
-
-.avatar-initial {
-  color: var(--color-text-primary);
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 700;
-  font-size: clamp(0.8rem, 2vw, 1.2rem);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-/* Active Player Highlight */
-.active-player .avatar-image {
-  border-color: var(--color-warning);
-  box-shadow: 
-    0 4px 16px rgba(245, 158, 11, 0.4),
-    0 0 0 2px rgba(245, 158, 11, 0.6),
-    inset 0 2px 4px rgba(255, 255, 255, 0.2);
-  animation: pulse-glow 2s infinite;
-}
-
-/* Countdown Timer */
-.countdown-timer {
-  position: absolute;
-  top: clamp(-3px, -0.5vw, -4px);
-  left: clamp(-3px, -0.5vw, -4px);
-  width: calc(100% + clamp(6px, 1vw, 8px));
-  height: calc(100% + clamp(6px, 1vw, 8px));
-  z-index: 1;
-}
-
-.timer-svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.timer-bg {
-  fill: none;
-  stroke: rgba(75, 85, 99, 0.3);
-  stroke-width: 2;
-}
-
-.timer-progress {
-  fill: none;
-  stroke: var(--color-warning);
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-dasharray: 100, 100;
-  transition: stroke-dasharray var(--transition-base);
-}
-
-@keyframes pulse-glow {
-  0%, 100% { 
-    box-shadow: 
-      0 4px 16px rgba(245, 158, 11, 0.4),
-      0 0 0 2px rgba(245, 158, 11, 0.6),
-      inset 0 2px 4px rgba(255, 255, 255, 0.2);
-  }
-  50% { 
-    box-shadow: 
-      0 4px 20px rgba(245, 158, 11, 0.6),
-      0 0 0 3px rgba(245, 158, 11, 0.8),
-      inset 0 2px 4px rgba(255, 255, 255, 0.3);
-  }
-}
-
-@keyframes countdown-tick {
-  0% { stroke-dasharray: 100, 100; }
-  100% { stroke-dasharray: 0, 100; }
-}
-
-/* Player Info */
-.player-details {
-  background: rgba(31, 41, 55, 0.9);
-  backdrop-filter: blur(12px);
-  border-radius: var(--border-radius-md);
-  padding: var(--space-xs) var(--space-sm);
-  font-size: var(--font-size-xs);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(245, 158, 11, 0.1);
-  transition: all var(--transition-base);
-  min-width: clamp(80px, 12vw, 120px);
-}
-
-.active-player .player-details {
-  border: 1px solid rgba(245, 158, 11, 0.5);
-  box-shadow: 
-    0 4px 12px rgba(245, 158, 11, 0.3),
-    0 0 0 1px rgba(245, 158, 11, 0.3),
-    inset 0 1px 0 rgba(245, 158, 11, 0.2);
-}
-
-.folded-player .player-details {
-  background: rgba(75, 85, 99, 0.6);
-  opacity: 0.6;
-  border: 1px solid rgba(107, 114, 128, 0.3);
-}
-
-/* Player Action Tags */
-.player-action {
-  display: inline-block;
-  background: linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%);
-  color: #1f2937;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 700;
-  font-size: clamp(0.6rem, 1.2vw, 0.8rem);
-  padding: var(--space-xs);
-  border-radius: var(--border-radius-sm);
-  margin: var(--space-xs) 0;
-  letter-spacing: 0.5px;
-  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  border: 1px solid rgba(217, 119, 6, 0.5);
-  animation: action-fade-in 0.3s ease-out;
-}
-
-@keyframes action-fade-in {
+@keyframes banner-in {
   from {
     opacity: 0;
-    transform: scale(0.8);
+    transform: translate(-50%, -50%) scale(0.85);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 
-.player-status {
-  margin: var(--space-xs) 0;
-}
-
-.fold-indicator {
-  display: inline-block;
-  background: rgba(220, 38, 38, 0.8);
-  color: #fff;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 700;
-  font-size: clamp(0.6rem, 1.2vw, 0.8rem);
-  padding: var(--space-xs);
-  border-radius: var(--border-radius-sm);
-  letter-spacing: 0.5px;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid rgba(239, 68, 68, 0.5);
-}
-
-.player-name {
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-xs);
-  font-size: clamp(0.75rem, 1.5vw, 0.9rem);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-}
-
-.player-chips {
-  color: var(--color-warning);
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 700;
-  font-size: clamp(0.7rem, 1.4vw, 0.85rem);
-  margin-bottom: var(--space-xs);
-  text-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
-}
-
-.player-bet {
-  color: var(--color-text-primary);
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 600;
-  font-size: clamp(0.6rem, 1.2vw, 0.75rem);
-  background: rgba(245, 158, 11, 0.25);
-  padding: var(--space-xs);
-  border-radius: var(--border-radius-sm);
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  margin-top: var(--space-xs);
-  display: inline-block;
-}
-
-/* Player State Styles */
-.active-player .player-name {
-  text-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
-}
-
-.active-player .player-chips {
-  text-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
-}
-
-.folded-player .player-name {
-  color: #9ca3af;
-  text-shadow: none;
-}
-
-.folded-player .player-chips {
-  color: #6b7280;
-  text-shadow: none;
-}
-
-.folded-player .player-bet {
-  color: #9ca3af;
-  background: rgba(156, 163, 175, 0.2);
-  border: 1px solid rgba(156, 163, 175, 0.3);
-  box-shadow: none;
-}
-
-.player-cards {
-  display: flex;
-  gap: clamp(2px, 0.5vw, 4px);
-  justify-content: center;
-  margin-top: var(--space-xs);
-}
-
-/* Action Panel Styles */
-.action-panel {
-  background: var(--color-surface);
-  backdrop-filter: blur(20px);
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--color-border);
-  padding: var(--space-lg);
-  box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(245, 158, 11, 0.1);
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-}
-
-.panel-title {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-lg);
-  font-weight: 700;
-  margin: 0;
-  text-align: center;
-}
-
-/* Primary Action Buttons */
-.primary-actions {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-sm);
-}
-
-.action-btn {
-  background: rgba(75, 85, 99, 0.9);
-  border: 1px solid rgba(107, 114, 128, 0.4);
-  border-radius: var(--border-radius-md);
-  padding: var(--space-sm);
-  cursor: pointer;
-  transition: all var(--transition-base);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-xs);
-  font-family: 'Montserrat', sans-serif;
-  position: relative;
-  overflow: hidden;
-  min-height: var(--min-touch-size);
-}
-
-@media (hover: hover) {
-  .action-btn:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 
-      var(--shadow-md),
-      0 0 0 1px rgba(245, 158, 11, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  }
-}
-
-.action-btn:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.action-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.action-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-.btn-label {
-  font-weight: 700;
-  font-size: var(--font-size-sm);
-  letter-spacing: 0.5px;
-  color: var(--color-text-primary);
-}
-
-.btn-desc {
-  font-weight: 500;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-/* Button Variants */
-.fold-btn {
-  background: linear-gradient(135deg, rgba(220, 38, 38, 0.8) 0%, rgba(185, 28, 28, 0.8) 100%);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-}
-
-@media (hover: hover) {
-  .fold-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.9) 0%, rgba(220, 38, 38, 0.9) 100%);
-    box-shadow: 
-      0 4px 12px rgba(220, 38, 38, 0.4),
-      0 0 0 1px rgba(239, 68, 68, 0.6),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  }
-}
-
-.call-btn {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.8) 0%, rgba(37, 99, 235, 0.8) 100%);
-  border: 1px solid rgba(96, 165, 250, 0.4);
-}
-
-@media (hover: hover) {
-  .call-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(96, 165, 250, 0.9) 0%, rgba(59, 130, 246, 0.9) 100%);
-    box-shadow: 
-      0 4px 12px rgba(59, 130, 246, 0.4),
-      0 0 0 1px rgba(96, 165, 250, 0.6),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  }
-}
-
-.raise-btn {
-  background: linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%);
-  border: 1px solid #fbbf24;
-  animation: pulse-main-btn 2s infinite;
-}
-
-@media (hover: hover) {
-  .raise-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, #fbbf24 0%, var(--color-warning) 100%);
-    box-shadow: 
-      0 6px 16px rgba(245, 158, 11, 0.5),
-      0 0 0 2px rgba(251, 191, 36, 0.7),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3);
-    animation: none;
-  }
-}
-
-.raise-btn .btn-label {
-  color: #1f2937;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.raise-btn .btn-desc {
-  color: #374151;
-}
-
-@keyframes pulse-main-btn {
-  0%, 100% { 
-    box-shadow: 
-      0 4px 12px rgba(245, 158, 11, 0.4),
-      0 0 0 1px rgba(245, 158, 11, 0.5);
-  }
-  50% { 
-    box-shadow: 
-      0 6px 16px rgba(245, 158, 11, 0.6),
-      0 0 0 2px rgba(245, 158, 11, 0.7);
-  }
-}
-
-/* Betting Controls */
-.betting-controls {
-  background: rgba(31, 41, 55, 0.5);
-  border-radius: var(--border-radius-md);
-  padding: var(--space-md);
-  border: 1px solid rgba(75, 85, 99, 0.3);
-}
-
-.slider-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
-.bet-slider {
-  width: 100%;
-  height: clamp(4px, 1vw, 6px);
-  background: linear-gradient(to right, rgba(75, 85, 99, 0.5) 0%, rgba(245, 158, 11, 0.3) 100%);
-  border-radius: 3px;
-  outline: none;
-  cursor: pointer;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.bet-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: clamp(16px, 3vw, 20px);
-  height: clamp(16px, 3vw, 20px);
-  background: linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%);
-  border-radius: 50%;
-  cursor: pointer;
-  border: 2px solid #fbbf24;
-  box-shadow: var(--shadow-sm);
-}
-
-.bet-slider::-moz-range-thumb {
-  width: clamp(16px, 3vw, 20px);
-  height: clamp(16px, 3vw, 20px);
-  background: linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%);
-  border-radius: 50%;
-  cursor: pointer;
-  border: 2px solid #fbbf24;
-  box-shadow: var(--shadow-sm);
-}
-
-.slider-labels {
-  display: flex;
-  justify-content: space-between;
-  font-family: 'Montserrat', sans-serif;
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-.current-label {
-  color: var(--color-warning);
-  font-size: var(--font-size-sm);
-  font-weight: 700;
-}
-
-/* Quick Bet Buttons */
-.quick-bets {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-sm);
-}
-
-.quick-bet-btn {
-  background: rgba(31, 41, 55, 0.9);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: var(--border-radius-sm);
-  padding: var(--space-xs) var(--space-xs);
-  cursor: pointer;
-  transition: all var(--transition-base);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-xs);
-  font-family: 'Montserrat', sans-serif;
-  min-height: calc(var(--min-touch-size) * 0.8);
-}
-
-@media (hover: hover) {
-  .quick-bet-btn:hover:not(:disabled) {
-    background: rgba(245, 158, 11, 0.15);
-    border-color: rgba(245, 158, 11, 0.5);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
-  }
-}
-
-.quick-bet-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.quick-bet-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-.bet-type {
-  font-size: clamp(0.6rem, 1.2vw, 0.7rem);
-  font-weight: 700;
-  color: var(--color-warning);
-  letter-spacing: 0.3px;
-}
-
-.bet-amount {
-  font-size: clamp(0.55rem, 1.1vw, 0.65rem);
-  font-weight: 500;
-  color: var(--color-text-secondary);
-}
-
-.all-in-btn {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.8) 0%, rgba(220, 38, 38, 0.8) 100%);
-  border: 1px solid rgba(248, 113, 113, 0.4);
-}
-
-@media (hover: hover) {
-  .all-in-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(248, 113, 113, 0.9) 0%, rgba(239, 68, 68, 0.9) 100%);
-    border-color: rgba(248, 113, 113, 0.6);
-    box-shadow: var(--shadow-sm);
-  }
-}
-
-.all-in-btn .bet-type {
-  color: #fecaca;
-}
-
-.all-in-btn .bet-amount {
-  color: #fed7d7;
-}
-
-/* 筹码移动动画 - 320-380ms */
-@keyframes chip-move-to-pot {
-  0% {
-    transform: translateX(0) translateY(0) scale(1);
+@keyframes banner-out {
+  from {
     opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
   }
-  50% {
-    transform: translateX(-100px) translateY(-50px) scale(0.8);
-    opacity: 0.8;
-  }
-  100% {
-    transform: translateX(-200px) translateY(-100px) scale(0.6);
+  to {
     opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
   }
 }
 
-.chip.moving-to-pot {
-  animation: chip-move-to-pot 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+.content {
+  flex: 1;
+  display: flex;
+  gap: 1.5rem;
 }
 
-@keyframes chip-stack-bounce {
-  0% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-8px) scale(1.1); }
-  100% { transform: translateY(0) scale(1); }
+.table-area {
+  flex: 1.8;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
 }
 
-.chip-stack.adding {
-  animation: chip-stack-bounce 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-}
-
-/* 玩家动作提示动画 */
-@keyframes action-pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 1;
-  }
-}
-
-.player-seat.taking-action {
-  animation: action-pulse 0.8s ease-in-out 3;
-}
-
-/* 筹码计数器动画 */
-@keyframes counter-update {
-  0% { 
-    transform: scale(1); 
-    color: #f8fafc; 
-  }
-  50% { 
-    transform: scale(1.2); 
-    color: #f59e0b; 
-  }
-  100% { 
-    transform: scale(1); 
-    color: #f8fafc; 
-  }
-}
-
-.chips-count.updating {
-  animation: counter-update 0.6s ease-out;
-}
-
-/* 底池增长动画 */
-@keyframes pot-grow {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.15);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-.pot-display.growing {
-  animation: pot-grow 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-.bet-buttons .el-button {
-  height: 44px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  border-radius: 12px;
-  border: none;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.table-felt {
   position: relative;
+  width: 100%;
+  max-width: 980px;
+  aspect-ratio: 16 / 9;
+  border-radius: 220px;
+  background: radial-gradient(circle at center, rgba(30, 64, 175, 0.18), rgba(15, 23, 42, 0.92));
+  border: 2px solid rgba(148, 163, 184, 0.22);
+  box-shadow: inset 0 0 60px rgba(15, 23, 42, 0.9), 0 25px 55px rgba(15, 23, 42, 0.5);
   overflow: hidden;
 }
 
-.bet-buttons .el-button::before {
-  content: '';
+.table-glow {
   position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.6s ease;
+  inset: 10%;
+  border-radius: 180px;
+  border: 1px dashed rgba(148, 163, 184, 0.2);
+  pointer-events: none;
 }
 
-.bet-buttons .el-button:hover::before {
-  left: 100%;
-}
-
-.bet-buttons .el-button--danger {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-  color: white;
-  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4);
-}
-
-.bet-buttons .el-button--danger:hover {
-  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(220, 38, 38, 0.5);
-}
-
-.bet-buttons .el-button--primary {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
-}
-
-.bet-buttons .el-button--primary:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
-}
-
-.bet-buttons .el-button--warning {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
-}
-
-.bet-buttons .el-button--warning:hover {
-  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5);
-}
-
-.bet-buttons .el-button--success {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
-}
-
-.bet-buttons .el-button--success:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
-}
-
-/* Chat Panel */
-.chat-panel {
-  background: var(--color-surface);
-  backdrop-filter: blur(20px);
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--color-border);
-  padding: var(--space-md);
+.pot-info {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.5rem 1rem;
+  background: rgba(15, 23, 42, 0.7);
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
 }
 
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  margin-bottom: var(--space-sm);
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
+.pot-info .label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(226, 232, 240, 0.75);
 }
 
-.chat-messages::-webkit-scrollbar {
-  width: 6px;
-}
-
-.chat-messages::-webkit-scrollbar-track {
-  background: rgba(148, 163, 184, 0.1);
-  border-radius: 3px;
-}
-
-.chat-messages::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
-  border-radius: 3px;
-  transition: background var(--transition-base);
-}
-
-.chat-messages::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
-}
-
-.chat-message {
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--border-radius-sm);
-  background: rgba(30, 41, 59, 0.3);
-  border: 1px solid rgba(148, 163, 184, 0.1);
-  font-size: var(--font-size-sm);
-  word-wrap: break-word;
-}
-
-.chat-message.own-message {
-  background: rgba(59, 130, 246, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-}
-
-.chat-username {
-  color: var(--color-warning);
-  font-weight: 600;
-  margin-right: var(--space-xs);
-}
-
-.chat-text {
-  color: var(--color-text-primary);
-}
-
-.chat-input-container {
-  display: flex;
-  gap: var(--space-sm);
-}
-
-.chat-input {
-  flex: 1;
-  padding: var(--space-sm);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: var(--border-radius-sm);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  transition: all var(--transition-base);
-}
-
-.chat-input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.chat-send-btn {
-  padding: var(--space-sm) var(--space-md);
-  white-space: nowrap;
-}
-
-/* Game Log */
-.game-log {
-  background: var(--color-surface);
-  backdrop-filter: blur(20px);
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--color-border);
-  padding: var(--space-md);
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-.log-container {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  gap: var(--space-md);
-}
-
-.debug-section {
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: var(--border-radius-md);
-  padding: var(--space-sm);
-}
-
-.debug-title {
-  color: var(--color-primary);
-  font-size: var(--font-size-sm);
+.pot-info .value {
+  font-size: 1.35rem;
   font-weight: 700;
-  margin: 0 0 var(--space-sm) 0;
 }
 
-.debug-grid {
+.pot-info .call {
+  font-size: 0.75rem;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.community-row {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.6rem;
+}
+
+.card-slot {
+  width: 70px;
+  height: 98px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(30, 41, 59, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.4);
+}
+
+.card-slot.revealed {
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.card-face {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.card-face.red {
+  color: #f87171;
+}
+
+.card-face.black {
+  color: #f8fafc;
+}
+
+.dealer-chip {
+  position: absolute;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #facc15;
+  color: #1f2937;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 25px rgba(250, 204, 21, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+}
+
+.player-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.seat {
+  position: absolute;
+  width: 180px;
+  pointer-events: none;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.seat-frame {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 18px;
+  padding: 0.65rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  box-shadow: 0 12px 25px rgba(15, 23, 42, 0.5);
+}
+
+.seat-header {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.seat-header .chips {
+  color: #facc15;
+}
+
+.seat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: rgba(226, 232, 240, 0.76);
+}
+
+.last-action {
+  font-weight: 600;
+}
+
+.bet-stack {
+  color: rgba(125, 211, 252, 0.95);
+}
+
+.hole-cards {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.hole-cards .card-slot {
+  width: 46px;
+  height: 64px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.seat.me .seat-frame {
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 16px 40px rgba(56, 189, 248, 0.25);
+}
+
+.seat.active .seat-frame {
+  border-color: rgba(129, 140, 248, 0.65);
+  box-shadow: 0 18px 45px rgba(99, 102, 241, 0.35);
+}
+
+.seat.folded {
+  opacity: 0.45;
+}
+
+.seat.allin .seat-frame {
+  border-color: rgba(250, 204, 21, 0.6);
+}
+
+.seat-0 { top: 8%; left: 15%; }
+.seat-1 { top: 5%; left: 50%; transform: translateX(-50%); }
+.seat-2 { top: 8%; right: 15%; }
+.seat-3 { bottom: 14%; right: 10%; }
+.seat-4 { bottom: 6%; left: 50%; transform: translateX(-50%); }
+.seat-5 { bottom: 14%; left: 10%; }
+
+.empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1rem;
+  color: rgba(226, 232, 240, 0.75);
+  background: rgba(15, 23, 42, 0.6);
+  padding: 0.75rem 1.2rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.table-footer {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+}
+
+.host-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.seat-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  padding: 0.4rem 0.6rem;
+  border-radius: 999px;
+}
+
+.ai-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.waiting-banner {
+  font-size: 0.95rem;
+  color: rgba(226, 232, 240, 0.85);
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 0.5rem 1rem;
+  border-radius: 12px;
+}
+
+.sidebar {
+  flex: 1;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-xs);
+  gap: 1rem;
+  grid-template-rows: min-content min-content 1fr 1fr;
 }
 
-.debug-item {
+.sidebar section {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 18px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45);
+}
+
+.sidebar h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.action-panel.inactive {
+  opacity: 0.55;
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.raise-panel {
+  background: rgba(30, 41, 59, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 16px;
+  padding: 0.75rem;
+  gap: 0.65rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.raise-panel header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: var(--font-size-xs);
-}
-
-.debug-label {
-  color: var(--color-text-secondary);
-  font-weight: 500;
-}
-
-.debug-value {
-  color: var(--color-text-primary);
   font-weight: 600;
 }
 
-.log-entries {
+.raise-panel .icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.2);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.slider-row input[type='range'] {
   flex: 1;
+  accent-color: #6366f1;
+  height: 4px;
+}
+
+.slider-value {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.quick-raise {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.quick-raise .btn {
+  padding: 0.4rem 0;
+}
+
+.info-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.info-panel li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: rgba(226, 232, 240, 0.8);
+}
+
+.log-scroll,
+.chat-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
-}
-
-.log-entries::-webkit-scrollbar {
-  width: 6px;
-}
-
-.log-entries::-webkit-scrollbar-track {
-  background: rgba(148, 163, 184, 0.1);
-  border-radius: 3px;
-}
-
-.log-entries::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
-  border-radius: 3px;
-  transition: background var(--transition-base);
-}
-
-.log-entries::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
 .log-entry {
+  font-size: 0.8rem;
+  color: rgba(226, 232, 240, 0.78);
+  padding: 0.35rem 0.45rem;
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.6);
+}
+
+.chat-line {
   display: flex;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-xs);
-  font-size: var(--font-size-xs);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--border-radius-sm);
-  background: rgba(30, 41, 59, 0.3);
-  border: 1px solid rgba(148, 163, 184, 0.1);
-  transition: all var(--transition-base);
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: rgba(226, 232, 240, 0.85);
 }
 
-@media (hover: hover) {
-  .log-entry:hover {
-    background: rgba(30, 41, 59, 0.5);
-    border: 1px solid rgba(148, 163, 184, 0.2);
-  }
+.chat-line.mine {
+  color: #38bdf8;
 }
 
-.log-time {
-  color: #94a3b8;
-  min-width: clamp(60px, 10vw, 80px);
-  font-weight: 500;
-  font-family: 'Courier New', monospace;
-  font-size: var(--font-size-xs);
+.chat-line .user {
+  font-weight: 600;
 }
 
-.log-message {
-  color: var(--color-text-secondary);
-  font-weight: 500;
+.chat-input-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.chat-input-row input {
   flex: 1;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 12px;
+  padding: 0.55rem 0.75rem;
+  color: #f8fafc;
+  font-size: 0.85rem;
 }
 
-
-/* 扑克牌花色颜色 */
-.red-suit {
-  color: #dc3545 !important; /* 红色 - 红桃♥和方块♦ */
+.chat-input-row input::placeholder {
+  color: rgba(148, 163, 184, 0.6);
 }
 
-.black-suit {
-  color: #000 !important; /* 黑色 - 黑桃♠和梅花♣ */
+.raise-panel-enter-active {
+  animation: raise-in 0.25s ease-out;
 }
 
-:deep(.el-slider) {
-  margin: 20px 0;
+.raise-panel-leave-active {
+  animation: raise-out 0.2s ease-in forwards;
 }
 
-:deep(.el-slider__runway) {
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-:deep(.el-slider__bar) {
-  background-color: #667eea;
-}
-
-:deep(.el-slider__button) {
-  border-color: #667eea;
-}
-
-/* Card Suit Colors */
-.red-suit {
-  color: #dc3545 !important;
-}
-
-.black-suit {
-  color: #000 !important;
-}
-
-/* Animation Keyframes */
-@keyframes pulse-glow {
-  0%, 100% { 
-    box-shadow: 
-      var(--shadow-md),
-      0 0 0 2px rgba(245, 158, 11, 0.6),
-      inset 0 2px 4px rgba(255, 255, 255, 0.2);
+@keyframes raise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
   }
-  50% { 
-    box-shadow: 
-      var(--shadow-lg),
-      0 0 0 3px rgba(245, 158, 11, 0.8),
-      inset 0 2px 4px rgba(255, 255, 255, 0.3);
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-@keyframes pulse-main-btn {
-  0%, 100% { 
-    box-shadow: 
-      0 4px 12px rgba(245, 158, 11, 0.4),
-      0 0 0 1px rgba(245, 158, 11, 0.5);
+@keyframes raise-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
   }
-  50% { 
-    box-shadow: 
-      0 6px 16px rgba(245, 158, 11, 0.6),
-      0 0 0 2px rgba(245, 158, 11, 0.7);
+  to {
+    opacity: 0;
+    transform: translateY(10px);
   }
 }
 
-/* Responsive Design */
-@container (max-width: 600px) {
-  .primary-actions {
-    grid-template-columns: 1fr;
-    gap: var(--space-xs);
+@media (max-width: 1200px) {
+  .content {
+    flex-direction: column;
   }
-  
-  .quick-bets {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-/* Mobile Breakpoints */
-@media (max-width: 1024px) {
-  .game-main {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
-  }
-  
-  .side-panel {
-    width: 100%;
-    flex-direction: row;
-    max-height: clamp(200px, 30vh, 300px);
-  }
-  
-  .action-panel {
-    flex: 1.5;
-  }
-  
-  .game-log {
-    flex: 1;
+  .sidebar {
+    grid-template-rows: repeat(4, minmax(0, auto));
   }
 }
 
 @media (max-width: 768px) {
-  .game-header {
-    flex-direction: column;
-    gap: var(--space-sm);
-    align-items: stretch;
+  .game-screen {
+    padding: 1rem;
   }
-  
-  .seats {
-    font-weight: 500;
+  .content {
+    gap: 1rem;
   }
-
-  .player-seat-controls {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    margin-right: var(--space-sm);
+  .table-felt {
+    aspect-ratio: 4 / 3;
   }
-
-  .player-seat-controls .seat-count,
-  .player-seat-controls .ai-count {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
+  .seat {
+    width: 150px;
   }
-
-  .player-seat-controls .seat-count {
-    min-width: 88px;
-  }
-
-  .player-seat-controls .ai-count {
-    min-width: 64px;
-    text-align: center;
-  }
-
-  .user-controls {
-    align-items: stretch;
-  }
-  
-  .control-buttons {
-    justify-content: center;
-  }
-  
-  .side-panel {
-    flex-direction: column;
-    max-height: none;
-  }
-  
-  .debug-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 480px) {
-  .game {
-    padding: var(--space-xs);
-  }
-  
-  .game-header {
-    padding: var(--space-sm);
-  }
-  
-  .poker-table {
-    width: clamp(300px, 90vw, 500px);
-    height: clamp(200px, 50vh, 350px);
-  }
-  
-  .primary-actions {
-    grid-template-columns: 1fr;
-  }
-  
-  .quick-bets {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-.ai-badge {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-size: 0.5rem;
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-weight: 700;
-}
-
-.allin-btn {
-  grid-column: span 1;
-}
-
-.raise-dialog {
-  margin-top: var(--space-md);
-  padding: var(--space-md);
-  background: rgba(31, 41, 55, 0.9);
-  border-radius: var(--border-radius-md);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.raise-dialog h4 {
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-sm);
-  font-size: var(--font-size-md);
-}
-
-.raise-input {
-  width: 100%;
-  padding: var(--space-sm);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: var(--border-radius-sm);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-md);
-  margin-bottom: var(--space-sm);
-}
-
-.raise-input:focus {
-  outline: none;
-  border-color: var(--color-warning);
-}
-
-.raise-actions {
-  display: flex;
-  gap: var(--space-sm);
-}
-
-.raise-actions .btn {
-  flex: 1;
+  .seat-0 { top: 6%; left: 8%; }
+  .seat-1 { top: 2%; left: 50%; transform: translateX(-50%); }
+  .seat-2 { top: 6%; right: 8%; }
+  .seat-3 { bottom: 16%; right: 6%; }
+  .seat-4 { bottom: 8%; left: 50%; transform: translateX(-50%); }
+  .seat-5 { bottom: 16%; left: 6%; }
 }
 </style>

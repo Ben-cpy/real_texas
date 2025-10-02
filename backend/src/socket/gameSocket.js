@@ -502,23 +502,31 @@ const processAIActions = async (game, roomId, io) => {
       aiActionCount++
 
       // 广播AI行动
-      io.to(roomId).emit('ai_action', {
-        playerId: aiResult.playerId,
-        playerName: aiResult.playerName,
-        action: aiResult.action,
-        amount: aiResult.amount
-      })
+      if (aiResult.actionSummary) {
+        io.to(roomId).emit('ai_action', aiResult.actionSummary)
+      } else {
+        io.to(roomId).emit('ai_action', {
+          playerId: aiResult.playerId,
+          playerName: aiResult.playerName,
+          action: aiResult.action,
+          amount: aiResult.amount ?? 0
+        })
+      }
 
       // 广播游戏状态更新
       io.to(roomId).emit('game_update', {
         gameState: aiResult.gameState,
-        lastAction: {
+        lastAction: aiResult.actionSummary || {
+          action: aiResult.action,
           type: aiResult.action,
-          player: aiResult.playerName,
-          amount: aiResult.amount
+          playerId: aiResult.playerId,
+          playerName: aiResult.playerName,
+          amount: aiResult.amount ?? 0,
+          timestamp: Date.now(),
+          phase: aiResult.gameState?.phase
         }
       })
-      
+
       // 更新数据库中的游戏状态
       await GameRoom.updateGameState(roomId, aiResult.gameState)
 
@@ -560,9 +568,14 @@ const handleGameFinish = async (game, roomId, io) => {
       }
 
       await User.updateChips(player.id, player.finalChips)
+
+      const isWinner = Array.isArray(results.winners)
+        ? results.winners.some((winner) => winner.id === player.id)
+        : results.winner && results.winner.id === player.id
+
       await User.updateGameStats(player.id, {
         gamesPlayed: 1,
-        gamesWon: player.id === results.winner.id ? 1 : 0,
+        gamesWon: isWinner ? 1 : 0,
         chipsWon: Math.max(0, player.chipsChange),
         chipsLost: Math.max(0, -player.chipsChange)
       })
@@ -594,7 +607,7 @@ const handleGameFinish = async (game, roomId, io) => {
     io.to(roomId).emit('game_finished', {
       results,
       winner: results.winner,
-      winners: results.winners || [results.winner],
+      winners: Array.isArray(results.winners) ? results.winners : (results.winner ? [results.winner] : []),
       pot: results.pot,
       gameState: finalState
     })

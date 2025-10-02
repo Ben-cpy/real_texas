@@ -115,13 +115,18 @@ class Database {
 
     // Add achievements column if it doesn't exist (migration)
     try {
-      await this.run(`ALTER TABLE users ADD COLUMN achievements TEXT DEFAULT '[]'`)
-      console.log('添加成就列成功')
-    } catch (error) {
-      // Column already exists, ignore error
-      if (!error.message.includes('duplicate column')) {
-        console.error('添加成就列错误:', error.message)
+      // Check if column already exists
+      const tableInfo = await this.all("PRAGMA table_info(users)")
+      const hasAchievements = tableInfo.some(column => column.name === 'achievements')
+
+      if (!hasAchievements) {
+        await this.run(`ALTER TABLE users ADD COLUMN achievements TEXT DEFAULT '[]'`)
+        console.log('添加成就列成功')
+      } else {
+        console.log('成就列已存在，跳过添加')
       }
+    } catch (error) {
+      console.error('检查成就列错误:', error.message)
     }
 
     console.log('数据库表初始化完成')

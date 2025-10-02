@@ -217,12 +217,12 @@ const register = async () => {
 
 .login-container {
   width: 100%;
-  max-width: 400px;
+  max-width: 500px;
   padding: 20px;
 }
 
 .login-card {
-  padding: 40px;
+  padding: 50px;
   text-align: center;
 }
 
@@ -260,9 +260,12 @@ const register = async () => {
   text-decoration: underline;
 }
 
-.login-card :deep(.el-input__inner) {
+.login-card :deep(.el-input__wrapper) {
   background-color: rgba(255, 255, 255, 0.1) !important;
   border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.login-card :deep(.el-input__inner) {
   color: #fff !important;
   -webkit-text-fill-color: #fff !important;
 }

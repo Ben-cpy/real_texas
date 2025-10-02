@@ -7,7 +7,13 @@
             <h1 class="title">德州扑克</h1>
             <p class="subtitle">专业的在线德州扑克游戏平台</p>
           </div>
-          <button class="btn btn-logout" @click="handleLogout">Logout</button>
+          <div class="header-actions">
+            <div class="current-chips">
+              <span class="chips-label">当前筹码</span>
+              <span class="chips-value">${{ userStats.chips.toLocaleString() }}</span>
+            </div>
+            <button class="btn btn-logout" @click="handleLogout">Logout</button>
+          </div>
         </div>
       </header>
       
@@ -178,7 +184,38 @@ onMounted(async () => {
 
 .header-text {
   flex: 1;
-  text-align: center;
+}
+
+.header-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.current-chips {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+  padding: 12px 20px;
+  border-radius: 12px;
+  border: 2px solid rgba(102, 126, 234, 0.3);
+}
+
+.chips-label {
+  font-size: 0.85rem;
+  color: #ccc;
+  margin-bottom: 4px;
+}
+
+.chips-value {
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .title {

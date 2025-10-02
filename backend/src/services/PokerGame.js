@@ -1,17 +1,197 @@
-// Poker card utility class
-export class Card {
-  constructor(suit, rank) {
-    this.suit = suit // ♠ ♥ ♦ ♣
-    this.rank = rank // 2-10, J, Q, K, A
-    this.value = this.getValue()
+// Poker game utilities and engine implementing full Texas Hold'em flow
+
+const SUITS = ['?', '?', '?', '?']
+const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
+
+const HAND_RANK_LABELS = {
+  1: 'High Card',
+  2: 'One Pair',
+  3: 'Two Pair',
+  4: 'Three of a Kind',
+  5: 'Straight',
+  6: 'Flush',
+  7: 'Full House',
+  8: 'Four of a Kind',
+  9: 'Straight Flush'
+}
+
+const AI_NAMES = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry', 'Ivy', 'Jack']
+
+function generateCombinations(items, k) {
+  const indices = []
+  const results = []
+
+  function backtrack(start, depth) {
+    if (depth === k) {
+      results.push(indices.map((index) => items[index]))
+      return
+    }
+
+    for (let i = start; i <= items.length - (k - depth); i++) {
+      indices[depth] = i
+      backtrack(i + 1, depth + 1)
+    }
   }
 
-  getValue() {
-    if (this.rank === 'A') return 14
-    if (this.rank === 'K') return 13
-    if (this.rank === 'Q') return 12
-    if (this.rank === 'J') return 11
-    return parseInt(this.rank)
+  if (items.length >= k) {
+    backtrack(0, 0)
+  }
+
+  return results
+}
+
+function detectStraight(values) {
+  let unique = [...new Set(values)].sort((a, b) => b - a)
+  if (unique.includes(14)) {
+    unique = unique.concat(1) // Treat Ace as low for wheel straights
+  }
+
+  for (let i = 0; i <= unique.length - 5; i++) {
+    let streak = 1
+    for (let j = i; j < unique.length - 1 && streak < 5; j++) {
+      if (unique[j] - 1 === unique[j + 1]) {
+        streak += 1
+      } else {
+        break
+      }
+    }
+
+    if (streak === 5) {
+      const high = unique[i] === 1 ? 5 : unique[i]
+      return { isStraight: true, highCard: high }
+    }
+  }
+
+  return { isStraight: false, highCard: null }
+}
+
+function evaluateFiveCardHand(cards) {
+  const sorted = [...cards].sort((a, b) => b.value - a.value)
+  const values = sorted.map((card) => card.value)
+
+  const suitCounts = new Map()
+  const valueCounts = new Map()
+
+  for (const card of sorted) {
+    suitCounts.set(card.suit, (suitCounts.get(card.suit) || 0) + 1)
+    valueCounts.set(card.value, (valueCounts.get(card.value) || 0) + 1)
+  }
+
+  const isFlush = suitCounts.size === 1
+  const straightInfo = detectStraight(values)
+  const groups = [...valueCounts.entries()].map(([value, count]) => ({
+    value: Number(value),
+    count
+  }))
+
+  groups.sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count
+    return b.value - a.value
+  })
+
+  let rank = 1
+  let rankValues = []
+  let rankName = HAND_RANK_LABELS[rank]
+
+  if (isFlush && straightInfo.isStraight) {
+    rank = 9
+    rankValues = [straightInfo.highCard]
+    rankName = straightInfo.highCard === 14 ? 'Royal Flush' : HAND_RANK_LABELS[rank]
+  } else if (groups[0].count === 4) {
+    const quadValue = groups[0].value
+    const kicker = groups[1].value
+    rank = 8
+    rankValues = [quadValue, kicker]
+    rankName = HAND_RANK_LABELS[rank]
+  } else if (groups[0].count === 3 && groups[1]?.count === 2) {
+    rank = 7
+    rankValues = [groups[0].value, groups[1].value]
+    rankName = HAND_RANK_LABELS[rank]
+  } else if (isFlush) {
+    rank = 6
+    rankValues = values
+    rankName = HAND_RANK_LABELS[rank]
+  } else if (straightInfo.isStraight) {
+    rank = 5
+    rankValues = [straightInfo.highCard]
+    rankName = HAND_RANK_LABELS[rank]
+  } else if (groups[0].count === 3) {
+    const kickers = sorted.filter((card) => card.value !== groups[0].value).map((card) => card.value)
+    rank = 4
+    rankValues = [groups[0].value, ...kickers]
+    rankName = HAND_RANK_LABELS[rank]
+  } else if (groups[0].count === 2 && groups[1]?.count === 2) {
+    const pairValues = [groups[0].value, groups[1].value].sort((a, b) => b - a)
+    const kicker = sorted.find((card) => card.value !== pairValues[0] && card.value !== pairValues[1])?.value || 0
+    rank = 3
+    rankValues = [...pairValues, kicker]
+    rankName = HAND_RANK_LABELS[rank]
+  } else if (groups[0].count === 2) {
+    const kickerValues = sorted.filter((card) => card.value !== groups[0].value).map((card) => card.value)
+    rank = 2
+    rankValues = [groups[0].value, ...kickerValues]
+    rankName = HAND_RANK_LABELS[rank]
+  } else {
+    rank = 1
+    rankValues = values
+    rankName = HAND_RANK_LABELS[rank]
+  }
+
+  return {
+    rank,
+    values: rankValues,
+    rankName,
+    cards: sorted
+  }
+}
+
+function compareHandRanks(first, second) {
+  if (first.rank !== second.rank) {
+    return first.rank - second.rank
+  }
+
+  const maxLength = Math.max(first.values.length, second.values.length)
+  for (let i = 0; i < maxLength; i++) {
+    const a = first.values[i] ?? 0
+    const b = second.values[i] ?? 0
+    if (a !== b) {
+      return a - b
+    }
+  }
+
+  return 0
+}
+
+function evaluateBestHand(cards) {
+  const combos = generateCombinations(cards, 5)
+  let best = null
+
+  for (const combo of combos) {
+    const evaluation = evaluateFiveCardHand(combo)
+    if (!best || compareHandRanks(evaluation, best) > 0) {
+      best = {
+        ...evaluation,
+        cards: evaluation.cards
+      }
+    }
+  }
+
+  return best
+}
+
+export class Card {
+  constructor(suit, rank) {
+    this.suit = suit
+    this.rank = rank
+    this.value = Card.getValue(rank)
+  }
+
+  static getValue(rank) {
+    if (rank === 'A') return 14
+    if (rank === 'K') return 13
+    if (rank === 'Q') return 12
+    if (rank === 'J') return 11
+    return parseInt(rank, 10)
   }
 
   toString() {
@@ -19,7 +199,6 @@ export class Card {
   }
 }
 
-// Deck class
 export class Deck {
   constructor() {
     this.cards = []
@@ -28,15 +207,13 @@ export class Deck {
 
   reset() {
     this.cards = []
-    const suits = ['♠', '♥', '♦', '♣']
-    const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
-    
-    for (const suit of suits) {
-      for (const rank of ranks) {
+
+    for (const suit of SUITS) {
+      for (const rank of RANKS) {
         this.cards.push(new Card(suit, rank))
       }
     }
-    
+
     this.shuffle()
   }
 
@@ -56,73 +233,112 @@ export class Deck {
   }
 }
 
-// Texas Hold'em poker game logic
+function getPlayerSnapshot(player, phase) {
+  const shouldRevealCards = phase === 'showdown'
+
+  return {
+    id: player.id,
+    name: player.name,
+    chips: player.chips,
+    currentBet: player.currentBet,
+    totalBet: player.totalBet,
+    folded: player.folded,
+    allIn: player.allIn,
+    active: player.active,
+    isAI: player.isAI || false,
+    lastAction: player.lastAction,
+    cards: player.cards.map((card) => ({
+      suit: card.suit,
+      rank: card.rank,
+      revealed: shouldRevealCards
+    })),
+    bestHand: shouldRevealCards && player.bestHand
+      ? {
+          rank: player.bestHand.rank,
+          rankName: player.bestHand.rankName,
+          values: player.bestHand.values,
+          cards: player.bestHand.cards.map((card) => ({ suit: card.suit, rank: card.rank }))
+        }
+      : null
+  }
+}
+
 export class PokerGame {
   constructor(roomId, options = {}) {
     this.roomId = roomId
     this.smallBlind = options.smallBlind || 10
     this.bigBlind = options.bigBlind || 20
     this.maxPlayers = options.maxPlayers || 6
-    this.desiredSeatCount = Math.min(this.maxPlayers, Math.max(3, options.desiredSeatCount || this.maxPlayers))
-    
+    this.desiredSeatCount = Math.min(
+      this.maxPlayers,
+      Math.max(3, options.desiredSeatCount || this.maxPlayers)
+    )
+
     this.players = []
     this.deck = new Deck()
     this.communityCards = []
     this.pot = 0
     this.currentBet = 0
-    this.currentPlayerIndex = 0
+    this.minimumRaiseAmount = this.bigBlind
+    this.currentPlayerIndex = -1
     this.dealerIndex = 0
-    this.phase = 'waiting' // waiting, preflop, flop, turn, river, showdown
+    this.phase = 'waiting'
     this.gameStarted = false
     this.gameFinished = false
-    
+    this.lastAction = null
+    this.smallBlindIndex = -1
+    this.bigBlindIndex = -1
     this.actionHistory = []
+    this.latestResults = null
   }
 
-  // Add player
   addPlayer(player) {
     if (this.players.length >= this.maxPlayers) {
       return false
     }
-    
-    if (this.players.some(p => p.id === player.id)) {
+
+    if (this.players.some((existing) => existing.id === player.id)) {
       return false
     }
+
+    const initialChips = Number.isFinite(player.chips) ? player.chips : 1000
 
     this.players.push({
       id: player.id,
       name: player.name,
-      chips: player.chips,
-      socketId: player.socketId,
+      chips: initialChips,
+      socketId: player.socketId ?? null,
       cards: [],
       currentBet: 0,
       totalBet: 0,
       folded: false,
       allIn: false,
       active: true,
-      isAI: player.isAI || false
+      isAI: player.isAI || false,
+      lastAction: null,
+      hasActedThisRound: false,
+      handRank: null,
+      bestHand: null,
+      initialChips
     })
 
     return true
   }
 
-  // Add AI player
   addAIPlayer() {
-    const aiNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry']
-    const aiId = `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const aiIndex = this.players.filter(player => player.isAI).length
-    const aiName = aiNames[aiIndex % aiNames.length]
-    const aiPlayer = {
+    const aiId = `ai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const aiIndex = this.players.filter((player) => player.isAI).length
+    const name = `AI ${AI_NAMES[aiIndex % AI_NAMES.length]}`
+
+    return this.addPlayer({
       id: aiId,
-      name: aiName,
+      name,
       chips: 1000,
       socketId: null,
       isAI: true
-    }
-    return this.addPlayer(aiPlayer)
+    })
   }
 
-  // Remove AI player
   removeAIPlayer() {
     for (let i = this.players.length - 1; i >= 0; i--) {
       if (this.players[i].isAI) {
@@ -133,87 +349,63 @@ export class PokerGame {
     return false
   }
 
-  // Count real players
   countRealPlayers() {
-    return this.players.filter(player => !player.isAI).length
+    return this.players.filter((player) => !player.isAI).length
   }
 
-  // Set desired seat count
   setDesiredSeatCount(count) {
     const realPlayers = this.countRealPlayers()
-    const sanitizedCount = Math.max(realPlayers, Math.max(3, Math.min(this.maxPlayers, count)))
-    this.desiredSeatCount = sanitizedCount
-    if (!this.gameStarted) {
-      this.syncAIPlayers()
-    }
+    const sanitized = Math.max(realPlayers, Math.max(3, Math.min(this.maxPlayers, count)))
+    this.desiredSeatCount = sanitized
+
     return {
       success: true,
       desiredSeatCount: this.desiredSeatCount
     }
   }
 
-  // Sync AI players based on desired seat count
   syncAIPlayers() {
     if (this.gameStarted) {
       return
     }
 
-    const realPlayers = this.countRealPlayers()
-    const targetTotal = Math.max(realPlayers, Math.min(this.desiredSeatCount, this.maxPlayers))
+    if (!this.singlePlayerMode) {
+      return
+    }
 
-    while (this.players.length > targetTotal) {
+    const target = this.desiredSeatCount
+
+    while (this.players.length < target) {
+      if (!this.addAIPlayer()) {
+        break
+      }
+    }
+
+    while (this.players.length > target) {
       if (!this.removeAIPlayer()) {
         break
       }
     }
-
-    let safety = 0
-    while (this.players.length < targetTotal && safety < 10) {
-      if (!this.addAIPlayer()) {
-        break
-      }
-      safety += 1
-    }
   }
 
-  // Get player count
-  getPlayerCount() {
-    return this.players.length
-  }
-
-  // Get active players list
-  getPlayers() {
-    return this.players.map(player => ({
-      id: player.id,
-      name: player.name,
-      chips: player.chips,
-      isAI: player.isAI || false,
-      active: player.active,
-      folded: player.folded,
-      allIn: player.allIn,
-      currentBet: player.currentBet,
-      totalBet: player.totalBet
-    }))
-  }
-
-  // Remove player
   removePlayer(playerId) {
-    const playerIndex = this.players.findIndex(p => p.id === playerId)
-    if (playerIndex === -1) return false
+    const index = this.players.findIndex((player) => player.id === playerId)
+    if (index === -1) {
+      return false
+    }
 
-    this.players.splice(playerIndex, 1)
-    
-    // If game is in progress, need to adjust current player index
-    if (this.gameStarted && playerIndex <= this.currentPlayerIndex) {
+    this.players.splice(index, 1)
+
+    if (this.gameStarted && index <= this.currentPlayerIndex) {
       this.currentPlayerIndex = Math.max(0, this.currentPlayerIndex - 1)
     }
 
     return true
   }
 
-  // Start game
   startGame() {
-    if (this.players.length < 2) {
+    const activeCount = this.players.filter((player) => player.active !== false).length
+    if (activeCount < 2) {
       return { success: false, error: 'At least 2 players are required to start the game' }
     }
 
@@ -222,63 +414,53 @@ export class PokerGame {
     }
 
     this.gameStarted = true
-    this.newHand()
-    
+    this.latestResults = null
+    this.beginHand()
+
     return { success: true }
   }
 
-  // Start new hand
-  newHand() {
+  beginHand() {
+    this.ensureDealerIndex()
     this.deck.reset()
     this.communityCards = []
     this.pot = 0
     this.currentBet = 0
+    this.minimumRaiseAmount = this.bigBlind
     this.phase = 'preflop'
     this.gameFinished = false
+    this.currentPlayerIndex = -1
+    this.smallBlindIndex = -1
+    this.bigBlindIndex = -1
     this.actionHistory = []
+    this.lastAction = null
+    this.latestResults = null
 
-    // Reset player states
-    this.players.forEach(player => {
+    this.players.forEach((player) => {
       player.cards = []
       player.currentBet = 0
       player.totalBet = 0
-      player.folded = false
-      player.allIn = false
-      player.active = player.chips > 0
-      player.initialChips = player.chips
-      player.handRank = null
+      player.folded = player.chips <= 0
+      player.allIn = player.chips <= 0
+      player.active = player.chips > 0 || player.active
+      player.hasActedThisRound = player.allIn || player.folded || !player.active
       player.lastAction = null
+      player.handRank = null
+      player.bestHand = null
+      player.initialChips = player.chips
     })
 
-    // Deal hole cards
     this.dealHoleCards()
-
-    // Post blinds
     this.postBlinds()
-    
-    // Set first action player (after big blind)
-    this.currentPlayerIndex = this.getNextActivePlayer((this.dealerIndex + 3) % this.players.length)
-  }
+    this.currentPlayerIndex = this.determineFirstToAct('preflop')
 
-  advanceDealer() {
-    const eligibleIndices = this.players
-      .map((player, idx) => ({ player, idx }))
-      .filter(({ player }) => player.chips > 0 && player.active !== false)
-
-    if (eligibleIndices.length === 0) {
-      return
+    if (this.currentPlayerIndex === -1) {
+      this.advancePhase()
     }
-
-    const currentDealerPosition = eligibleIndices.findIndex(({ idx }) => idx === this.dealerIndex)
-    const nextPosition = currentDealerPosition === -1
-      ? 0
-      : (currentDealerPosition + 1) % eligibleIndices.length
-
-    this.dealerIndex = eligibleIndices[nextPosition].idx
   }
 
   startNextHand() {
-    const activePlayers = this.players.filter(player => player.active && player.chips > 0)
+    const activePlayers = this.players.filter((player) => player.active && player.chips > 0)
     if (activePlayers.length < 2) {
       this.gameStarted = false
       this.gameFinished = true
@@ -286,584 +468,906 @@ export class PokerGame {
     }
 
     this.advanceDealer()
-    this.gameFinished = false
-    this.gameStarted = true
-    this.newHand()
+    this.beginHand()
 
     return { success: true, gameState: this.getGameState() }
   }
 
-  // Deal hole cards
+  ensureDealerIndex() {
+    if (this.players.length === 0) {
+      this.dealerIndex = 0
+      return
+    }
+
+    const dealer = this.players[this.dealerIndex]
+    if (!dealer || !dealer.active || dealer.chips <= 0) {
+      const next = this.players.findIndex((player) => player.active && player.chips > 0)
+      this.dealerIndex = next === -1 ? 0 : next
+    }
+  }
+
+  advanceDealer() {
+    if (this.players.length === 0) {
+      this.dealerIndex = 0
+      return
+    }
+
+    const nextDealer = this.findNextIndex(this.dealerIndex, (player) => player.active && player.chips > 0)
+    if (nextDealer !== -1) {
+      this.dealerIndex = nextDealer
+    }
+  }
+
   dealHoleCards() {
-    for (let i = 0; i < 2; i++) {
-      for (const player of this.players) {
-        if (player.active) {
+    const startIndex = this.findNextIndex(this.dealerIndex, (player) => player.active && player.chips > 0, true)
+    if (startIndex === -1) {
+      return
+    }
+
+    for (let round = 0; round < 2; round++) {
+      let index = startIndex
+      for (let count = 0; count < this.players.length; count++) {
+        const player = this.players[index]
+        if (player && player.active && player.chips > 0) {
           player.cards.push(this.deck.deal())
         }
+        index = (index + 1) % this.players.length
       }
     }
   }
 
-  // Post blinds
   postBlinds() {
-    const activePlayersCount = this.players.filter(p => p.active).length
-    if (activePlayersCount < 2) return
+    const activeIndices = this.players
+      .map((player, idx) => ({ player, idx }))
+      .filter(({ player }) => player.active && player.chips > 0)
 
-    // Small blind
-    const smallBlindIndex = (this.dealerIndex + 1) % this.players.length
-    const smallBlindPlayer = this.players[smallBlindIndex]
-    if (smallBlindPlayer && smallBlindPlayer.active) {
-      this.playerBet(smallBlindPlayer, Math.min(this.smallBlind, smallBlindPlayer.chips))
+    if (activeIndices.length < 2) {
+      return
     }
 
-    // Big blind
-    const bigBlindIndex = (this.dealerIndex + 2) % this.players.length
-    const bigBlindPlayer = this.players[bigBlindIndex]
-    if (bigBlindPlayer && bigBlindPlayer.active) {
-      this.playerBet(bigBlindPlayer, Math.min(this.bigBlind, bigBlindPlayer.chips))
-      this.currentBet = bigBlindPlayer.currentBet
+    if (activeIndices.length === 2) {
+      // Heads-up: dealer posts small blind, other posts big blind
+      const dealerIndex = this.dealerIndex
+      const dealerPlayer = this.players[dealerIndex]
+      if (!dealerPlayer.active || dealerPlayer.chips === 0) {
+        this.ensureDealerIndex()
+      }
+
+      this.smallBlindIndex = this.dealerIndex
+      this.bigBlindIndex = activeIndices.find(({ idx }) => idx !== this.smallBlindIndex)?.idx ?? this.smallBlindIndex
+    } else {
+      this.smallBlindIndex = this.findNextIndex(this.dealerIndex, (player) => player.active && player.chips > 0)
+      this.bigBlindIndex = this.findNextIndex(this.smallBlindIndex, (player) => player.active && player.chips > 0)
     }
+
+    if (this.smallBlindIndex !== -1) {
+      const player = this.players[this.smallBlindIndex]
+      const amount = Math.min(this.smallBlind, player.chips)
+      const paid = this.playerBet(player, amount)
+      player.lastAction = {
+        action: 'small_blind',
+        type: 'small_blind',
+        playerId: player.id,
+        playerName: player.name,
+        amount: paid,
+        phase: this.phase,
+        timestamp: Date.now()
+      }
+      player.hasActedThisRound = false
+    }
+
+    if (this.bigBlindIndex !== -1) {
+      const player = this.players[this.bigBlindIndex]
+      const amount = Math.min(this.bigBlind, player.chips)
+      const paid = this.playerBet(player, amount)
+      player.lastAction = {
+        action: 'big_blind',
+        type: 'big_blind',
+        playerId: player.id,
+        playerName: player.name,
+        amount: paid,
+        phase: this.phase,
+        timestamp: Date.now()
+      }
+      player.hasActedThisRound = false
+      this.currentBet = Math.max(this.currentBet, player.currentBet)
+    }
+
+    this.minimumRaiseAmount = this.bigBlind
   }
 
-  // Handle player action
-  handlePlayerAction(playerId, action, amount = 0) {
-    const player = this.players.find(p => p.id === playerId)
-    if (!player || !player.active || player.folded) {
+  findNextIndex(startIndex, predicate, includeStart = false) {
+    if (this.players.length === 0) {
+      return -1
+    }
+
+    const total = this.players.length
+    for (let step = includeStart ? 0 : 1; step <= total; step++) {
+      const idx = (startIndex + step + total) % total
+      const player = this.players[idx]
+      if (predicate(player, idx)) {
+        return idx
+      }
+    }
+
+    return -1
+  }
+
+  determineFirstToAct(phase) {
+    const eligible = (player) =>
+      player && player.active && !player.folded && !player.allIn && player.chips > 0
+
+    const activeIndices = this.players
+      .map((player, idx) => ({ player, idx }))
+      .filter(({ player }) => player.active && !player.folded)
+
+    if (activeIndices.length === 0) {
+      return -1
+    }
+
+    if (phase === 'preflop') {
+      if (activeIndices.length === 2) {
+        const sbIndex = this.smallBlindIndex !== -1 ? this.smallBlindIndex : this.dealerIndex
+        if (eligible(this.players[sbIndex])) {
+          return sbIndex
+        }
+        return this.findNextIndex(sbIndex, eligible)
+      }
+
+      const bbIndex = this.bigBlindIndex !== -1 ? this.bigBlindIndex : this.findNextIndex(this.dealerIndex, (player) => player.active && player.chips > 0)
+      return this.findNextIndex(bbIndex, eligible)
+    }
+
+    return this.findNextIndex(this.dealerIndex, eligible)
+  }
+
+  playerBet(player, amount) {
+    const actual = Math.min(amount, player.chips)
+    if (actual <= 0) {
+      return 0
+    }
+
+    player.chips -= actual
+    player.currentBet += actual
+    player.totalBet += actual
+    this.pot += actual
+
+    if (player.chips === 0) {
+      player.allIn = true
+      player.hasActedThisRound = true
+    }
+
+    return actual
+  }
+
+  handlePlayerAction(playerId, rawAction, rawAmount = 0) {
+    if (!this.gameStarted || this.gameFinished) {
+      return { success: false, error: 'Game is not in progress' }
+    }
+
+    const action = (rawAction || '').toLowerCase()
+    const amount = Number.isFinite(rawAmount) ? rawAmount : Number(rawAmount) || 0
+
+    const player = this.players.find((p) => p.id === playerId)
+    if (!player || !player.active) {
       return { success: false, error: 'Invalid player' }
     }
 
-    if (this.players[this.currentPlayerIndex].id !== playerId) {
+    if (player.folded) {
+      return { success: false, error: 'Player has already folded' }
+    }
+
+    if (player.allIn) {
+      return { success: false, error: 'Player is all-in' }
+    }
+
+    const currentPlayer = this.players[this.currentPlayerIndex]
+    if (!currentPlayer || currentPlayer.id !== playerId) {
       return { success: false, error: 'Not your turn' }
     }
 
-    let actionResult = { success: true, action: null }
+    let result
 
     switch (action) {
       case 'fold':
-        actionResult = this.handleFold(player)
+        result = this.handleFold(player)
         break
       case 'check':
-        actionResult = this.handleCheck(player)
+        result = this.handleCheck(player)
         break
       case 'call':
-        actionResult = this.handleCall(player)
+        result = this.handleCall(player)
         break
       case 'bet':
       case 'raise':
-        actionResult = this.handleBet(player, amount)
+        result = this.handleRaise(player, amount)
         break
       case 'all_in':
-        actionResult = this.handleAllIn(player)
+      case 'all-in':
+        result = this.handleAllIn(player)
         break
       default:
         return { success: false, error: 'Invalid action' }
     }
 
-    if (actionResult.success) {
-      this.actionHistory.push({
-        playerId,
-        action,
-        amount: actionResult.amount || 0,
-        timestamp: Date.now()
-      })
-
-      // Move to next player
-      this.nextPlayer()
-      
-      // Check if need to move to next phase
-      if (this.isRoundComplete()) {
-        this.nextPhase()
-      }
+    if (!result.success) {
+      return result
     }
 
-    return actionResult
+    const summary = {
+      action: result.action,
+      type: result.action,
+      playerId: player.id,
+      playerName: player.name,
+      amount: result.amount || 0,
+      totalBet: player.currentBet,
+      phase: this.phase,
+      timestamp: Date.now()
+    }
+
+    player.lastAction = summary
+    player.hasActedThisRound = true
+    this.lastAction = summary
+    this.actionHistory.push(summary)
+
+    const remainingPlayers = this.players.filter((p) => p.active && !p.folded)
+    if (remainingPlayers.length <= 1) {
+      this.finishHandByFold(remainingPlayers[0])
+      return { success: true, action: summary }
+    }
+
+    const roundComplete = this.isRoundComplete()
+
+    if (result.requiresResponse) {
+      this.resetActionFlagsExcept(player.id)
+    }
+
+    if (this.gameFinished) {
+      return { success: true, action: summary }
+    }
+
+    if (roundComplete) {
+      this.advancePhase()
+    } else {
+      this.nextPlayer()
+    }
+
+    if (!this.gameFinished && this.players.filter((p) => p.active && !p.folded).length <= 1) {
+      this.finishHandByFold(this.players.find((p) => p.active && !p.folded))
+    }
+
+    return { success: true, action: summary }
   }
 
-  // Improved AI strategy
-  getAIAction(player) {
-    const callAmount = this.currentBet - player.currentBet
-    const random = Math.random()
+  handleFold(player) {
+    player.folded = true
+    player.hasActedThisRound = true
+    return { success: true, action: 'fold' }
+  }
 
-    // If out of chips, can only fold or go all-in
-    if (player.chips <= callAmount) {
-      const handStrength = this.calculateHandStrength(player)
-      return handStrength > 0.5 ? { action: 'all_in' } : { action: 'fold' }
+  handleCheck(player) {
+    if (this.currentBet > player.currentBet) {
+      return { success: false, error: 'Cannot check when facing a bet' }
     }
 
-    // Calculate hand strength
+    return { success: true, action: 'check' }
+  }
+
+  handleCall(player) {
+    const callAmount = Math.max(0, this.currentBet - player.currentBet)
+    if (callAmount === 0) {
+      return this.handleCheck(player)
+    }
+
+    const paid = this.playerBet(player, callAmount)
+    return {
+      success: true,
+      action: 'call',
+      amount: paid,
+      requiresResponse: false
+    }
+  }
+
+  handleRaise(player, declaredAmount) {
+    const previousHighest = this.currentBet
+    const amountToInvest = Math.max(0, Number(declaredAmount) || 0)
+    const actualAmount = Math.min(amountToInvest, player.chips)
+    const targetTotal = player.currentBet + actualAmount
+
+    if (actualAmount <= 0) {
+      return { success: false, error: 'Invalid raise amount' }
+    }
+
+    if (targetTotal <= previousHighest) {
+      return { success: false, error: 'Raise must exceed current bet' }
+    }
+
+    const raiseSize = targetTotal - previousHighest
+    const minimumRaise = previousHighest === 0 ? this.bigBlind : this.minimumRaiseAmount
+
+    const isAllIn = actualAmount === player.chips
+    if (raiseSize < minimumRaise && !isAllIn) {
+      return { success: false, error: `Minimum raise is ${minimumRaise}` }
+    }
+
+    const paid = this.playerBet(player, actualAmount)
+    this.currentBet = Math.max(this.currentBet, player.currentBet)
+
+    if (targetTotal > previousHighest) {
+      if (raiseSize >= minimumRaise) {
+        this.minimumRaiseAmount = raiseSize
+      }
+    }
+
+    return {
+      success: true,
+      action: previousHighest === 0 ? 'bet' : 'raise',
+      amount: paid,
+      requiresResponse: true
+    }
+  }
+  handleAllIn(player) {
+    const amount = player.chips
+    if (amount <= 0) {
+      return { success: false, error: 'No chips remaining' }
+    }
+
+    const paid = this.playerBet(player, amount)
+    const previousHighest = this.currentBet
+    this.currentBet = Math.max(this.currentBet, player.currentBet)
+
+    const raiseSize = this.currentBet - previousHighest
+    if (raiseSize > 0) {
+      if (raiseSize >= this.minimumRaiseAmount) {
+        this.minimumRaiseAmount = raiseSize
+      }
+    }
+
+    return {
+      success: true,
+      action: 'all_in',
+      amount: paid,
+      requiresResponse: raiseSize > 0 && raiseSize >= this.minimumRaiseAmount
+    }
+  }
+
+  resetActionFlagsExcept(playerId) {
+    this.players.forEach((player) => {
+      if (player.id === playerId) {
+        player.hasActedThisRound = true
+        return
+      }
+
+      if (!player.active || player.folded) {
+        player.hasActedThisRound = true
+        return
+      }
+
+      if (player.allIn || player.chips === 0) {
+        player.hasActedThisRound = true
+        return
+      }
+
+      player.hasActedThisRound = false
+    })
+  }
+
+  nextPlayer() {
+    const nextIndex = this.findNextIndex(this.currentPlayerIndex, (player) =>
+      player && player.active && !player.folded && !player.allIn && player.chips > 0
+    )
+
+    this.currentPlayerIndex = nextIndex
+  }
+
+  isRoundComplete() {
+    const activePlayers = this.players.filter((player) => player.active && !player.folded)
+
+    if (activePlayers.length <= 1) {
+      return true
+    }
+
+    const actionable = activePlayers.filter((player) => !player.allIn && player.chips > 0)
+    if (actionable.length === 0) {
+      return true
+    }
+
+    const unmatched = actionable.filter((player) => player.currentBet !== this.currentBet)
+    if (unmatched.length > 0) {
+      return false
+    }
+
+    return actionable.every((player) => player.hasActedThisRound)
+  }
+
+  resetForNextBettingRound() {
+    this.players.forEach((player) => {
+      player.currentBet = 0
+      player.hasActedThisRound = player.allIn || player.folded || !player.active
+      if (player.allIn && player.chips === 0) {
+        player.hasActedThisRound = true
+      }
+    })
+
+    this.currentBet = 0
+    this.minimumRaiseAmount = this.bigBlind
+  }
+
+  advancePhase() {
+    if (this.gameFinished) {
+      return
+    }
+
+    const nextPhaseMap = {
+      preflop: 'flop',
+      flop: 'turn',
+      turn: 'river',
+      river: 'showdown'
+    }
+
+    let nextPhase = nextPhaseMap[this.phase] || 'showdown'
+    this.phase = nextPhase
+
+    if (this.phase === 'flop') {
+      this.deck.deal() // Burn card
+      for (let i = 0; i < 3; i++) {
+        this.communityCards.push(this.deck.deal())
+      }
+    } else if (this.phase === 'turn' || this.phase === 'river') {
+      this.deck.deal()
+      this.communityCards.push(this.deck.deal())
+    }
+
+    if (this.phase === 'showdown') {
+      this.resolveShowdown()
+      return
+    }
+
+    this.resetForNextBettingRound()
+    this.currentPlayerIndex = this.determineFirstToAct(this.phase)
+
+    if (this.currentPlayerIndex === -1) {
+      this.advancePhase()
+    }
+  }
+
+  finishHandByFold(winner) {
+    if (!winner) {
+      this.gameFinished = true
+      this.phase = 'showdown'
+      return
+    }
+
+    const totalPot = this.pot
+    winner.chips += this.pot
+    this.pot = 0
+
+    this.players.forEach((player) => {
+      player.bestHand = null
+      player.handRank = null
+      player.currentBet = 0
+    })
+
+    this.latestResults = {
+      pot: totalPot,
+      winners: [
+        {
+          id: winner.id,
+          name: winner.name,
+          chipsWon: totalPot,
+          finalChips: winner.chips,
+          hand: null,
+          reason: 'all_folded'
+        }
+      ],
+      winner: {
+        id: winner.id,
+        name: winner.name,
+        chipsWon: totalPot,
+        finalChips: winner.chips,
+        hand: null,
+        reason: 'all_folded'
+      },
+      players: this.players.map((player) => ({
+        id: player.id,
+        name: player.name,
+        finalChips: player.chips,
+        chipsChange: player.chips - player.initialChips,
+        folded: player.folded,
+        isAI: player.isAI || false
+      }))
+    }
+
+    this.gameFinished = true
+    this.phase = 'showdown'
+    this.currentPlayerIndex = -1
+  }
+
+  resolveShowdown() {
+    const contestants = this.players.filter((player) => player.active && !player.folded)
+
+    if (contestants.length === 0) {
+      this.finishHandByFold(null)
+      return
+    }
+
+    contestants.forEach((player) => {
+      const allCards = player.cards.concat(this.communityCards)
+      if (allCards.length >= 5) {
+        const evaluation = evaluateBestHand(allCards)
+        player.bestHand = evaluation
+        player.handRank = evaluation
+      }
+    })
+
+    const contributions = this.players.map((player, idx) => ({
+      idx,
+      player,
+      remaining: player.totalBet
+    }))
+
+    const pots = []
+    let totalPotAccounted = 0
+
+    while (true) {
+      const remainingPlayers = contributions.filter((entry) => entry.remaining > 0)
+      if (remainingPlayers.length === 0) {
+        break
+      }
+
+      const level = Math.min(...remainingPlayers.map((entry) => entry.remaining))
+      const participants = contributions.filter((entry) => entry.remaining > 0)
+      const eligible = participants
+        .filter((entry) => {
+          const player = entry.player
+          return player.active && !player.folded
+        })
+        .map((entry) => entry.idx)
+
+      const potAmount = level * participants.length
+      totalPotAccounted += potAmount
+
+      pots.push({
+        amount: potAmount,
+        participants: participants.map((entry) => entry.idx),
+        eligible
+      })
+
+      participants.forEach((entry) => {
+        entry.remaining -= level
+      })
+    }
+
+    const payouts = new Map()
+
+    pots.forEach((pot) => {
+      const eligiblePlayers = pot.eligible
+        .map((idx) => this.players[idx])
+        .filter((player) => player && !player.folded)
+
+      if (eligiblePlayers.length === 0) {
+        return
+      }
+
+      let best = eligiblePlayers[0]
+      for (let i = 1; i < eligiblePlayers.length; i++) {
+        const candidate = eligiblePlayers[i]
+        if (compareHandRanks(candidate.bestHand, best.bestHand) > 0) {
+          best = candidate
+        }
+      }
+
+      const winners = eligiblePlayers.filter(
+        (player) => compareHandRanks(player.bestHand, best.bestHand) === 0
+      )
+
+      const share = Math.floor(pot.amount / winners.length)
+      let remainder = pot.amount - share * winners.length
+
+      const sortedWinners = [...winners].sort(
+        (a, b) => this.players.indexOf(a) - this.players.indexOf(b)
+      )
+
+      sortedWinners.forEach((winner) => {
+        let totalShare = share
+        if (remainder > 0) {
+          totalShare += 1
+          remainder -= 1
+        }
+
+        winner.chips += totalShare
+        payouts.set(winner.id, (payouts.get(winner.id) || 0) + totalShare)
+      })
+    })
+
+    this.pot = Math.max(0, this.pot - totalPotAccounted)
+    if (this.pot > 0) {
+      // In case of rounding issues, distribute leftover to best hand
+      const remainingContestants = contestants.slice().sort((a, b) => compareHandRanks(b.bestHand, a.bestHand))
+      const recipient = remainingContestants[0]
+      recipient.chips += this.pot
+      payouts.set(recipient.id, (payouts.get(recipient.id) || 0) + this.pot)
+      this.pot = 0
+    }
+
+    const winnersDetailed = [...payouts.entries()].map(([playerId, chipsWon]) => {
+      const player = this.players.find((p) => p.id === playerId)
+      return {
+        id: player.id,
+        name: player.name,
+        chipsWon,
+        finalChips: player.chips,
+        hand: player.bestHand
+          ? {
+              rank: player.bestHand.rank,
+              rankName: player.bestHand.rankName,
+              cards: player.bestHand.cards.map((card) => ({ suit: card.suit, rank: card.rank }))
+            }
+          : null
+      }
+    })
+
+    winnersDetailed.sort((a, b) => b.chipsWon - a.chipsWon)
+
+    const totalPot = this.players.reduce((sum, player) => sum + (player.totalBet || 0), 0)
+
+    this.latestResults = {
+      pot: totalPot,
+      winners: winnersDetailed,
+      winner: winnersDetailed[0] || null,
+      players: this.players.map((player) => ({
+        id: player.id,
+        name: player.name,
+        finalChips: player.chips,
+        chipsChange: player.chips - player.initialChips,
+        folded: player.folded,
+        isAI: player.isAI || false,
+        bestHand: player.bestHand
+          ? {
+              rank: player.bestHand.rank,
+              rankName: player.bestHand.rankName,
+              cards: player.bestHand.cards.map((card) => ({ suit: card.suit, rank: card.rank }))
+            }
+          : null
+      }))
+    }
+
+    this.gameFinished = true
+    this.phase = 'showdown'
+    this.currentPlayerIndex = -1
+  }
+  getAIAction(player) {
+    const callAmount = Math.max(0, this.currentBet - player.currentBet)
+    const random = Math.random()
+
     const handStrength = this.calculateHandStrength(player)
-    const potOdds = callAmount / (this.pot + callAmount)
+    const potOdds = callAmount === 0 ? 0 : callAmount / (this.pot + callAmount)
     const position = this.getPlayerPosition(player)
 
-    // If no need to call (can check)
+    if (player.chips <= callAmount) {
+      return handStrength > 0.45 ? { action: 'all_in' } : { action: 'fold' }
+    }
+
     if (callAmount === 0) {
-      // Strong hand: raise
       if (handStrength > 0.7) {
-        const raiseAmount = Math.floor(this.pot * (0.5 + random * 0.5))
-        return { action: 'bet', amount: Math.min(raiseAmount, player.chips) }
+        const raiseAmount = Math.min(player.chips, Math.max(this.bigBlind, Math.floor(this.pot * (0.4 + random * 0.4))))
+        return { action: 'raise', amount: raiseAmount }
       }
-      // Medium hand: sometimes raise, sometimes check
+
       if (handStrength > 0.4) {
         if (random < 0.3) {
-          return { action: 'bet', amount: this.bigBlind }
+          return { action: 'raise', amount: Math.min(player.chips, this.bigBlind * 2) }
         }
         return { action: 'check' }
       }
-      // Weak hand: check
+
       return { action: 'check' }
     }
 
-    // Need to call situations
-    // Strong hand: raise
     if (handStrength > 0.75) {
-      if (random < 0.7) {
-        const raiseAmount = Math.floor(this.currentBet * 2 + this.pot * 0.3)
-        return { action: 'bet', amount: Math.min(raiseAmount, player.chips) }
+      if (random < 0.6) {
+        const raiseAmount = Math.min(player.chips, Math.floor((this.currentBet - player.currentBet) + this.minimumRaiseAmount + this.pot * 0.2))
+        return { action: 'raise', amount: Math.max(raiseAmount, this.minimumRaiseAmount) }
       }
       return { action: 'call' }
     }
 
-    // Medium hand: decide based on pot odds
     if (handStrength > 0.5) {
       if (potOdds < handStrength - 0.1) {
         return { action: 'call' }
       }
-      return random < 0.6 ? { action: 'call' } : { action: 'fold' }
+      return random < 0.5 ? { action: 'call' } : { action: 'fold' }
     }
 
-    // Low-medium hand: cautious calling
     if (handStrength > 0.3) {
-      if (callAmount <= this.bigBlind * 2 && random < 0.5) {
+      if (callAmount <= this.bigBlind && random < 0.4) {
         return { action: 'call' }
       }
       return { action: 'fold' }
     }
 
-    // Weak hand: mostly fold, occasional bluff
     if (position === 'late' && random < 0.15) {
-      // Occasional bluff in late position
       return { action: 'call' }
     }
 
     return { action: 'fold' }
   }
 
-  // Calculate hand strength (0-1, where 1 is strongest)
   calculateHandStrength(player) {
     if (!player.cards || player.cards.length === 0) {
       return 0
     }
 
-    // Evaluate hand using currently visible cards
     const allCards = player.cards.concat(this.communityCards)
-    const handRank = this.evaluateHand(allCards)
-
-    // Return strength based on hand rank
-    // 9: Straight flush, 8: Four of a kind, 7: Full house, 6: Flush, 5: Straight, 4: Three of a kind, 3: Two pair, 2: One pair, 1: High card
-    const rankToStrength = {
-      9: 0.95 + Math.random() * 0.05,  // Straight flush: 0.95-1.0
-      8: 0.90 + Math.random() * 0.05,  // Four of a kind: 0.90-0.95
-      7: 0.80 + Math.random() * 0.10,  // Full house: 0.80-0.90
-      6: 0.70 + Math.random() * 0.10,  // Flush: 0.70-0.80
-      5: 0.60 + Math.random() * 0.10,  // Straight: 0.60-0.70
-      4: 0.50 + Math.random() * 0.10,  // Three of a kind: 0.50-0.60
-      3: 0.40 + Math.random() * 0.10,  // Two pair: 0.40-0.50
-      2: 0.25 + Math.random() * 0.15,  // One pair: 0.25-0.40
-      1: 0.10 + Math.random() * 0.15   // High card: 0.10-0.25
-    }
-
-    let strength = rankToStrength[handRank.rank] || 0.2
-
-    // Preflop stage, only consider hole cards
-    if (this.communityCards.length === 0) {
+    if (allCards.length < 5) {
       const [card1, card2] = player.cards
-      // Pair
+      if (!card1 || !card2) {
+        return 0
+      }
+
       if (card1.value === card2.value) {
-        if (card1.value >= 10) strength = 0.8 + Math.random() * 0.1  // High pair
-        else if (card1.value >= 7) strength = 0.6 + Math.random() * 0.15
-        else strength = 0.4 + Math.random() * 0.15
+        if (card1.value >= 12) return 0.75
+        if (card1.value >= 9) return 0.6
+        return 0.45
       }
-      // High cards
-      else if (card1.value >= 12 || card2.value >= 12) {
-        strength = 0.5 + Math.random() * 0.2
-      }
-      // Suited
-      else if (card1.suit === card2.suit) {
-        strength += 0.1
-      }
-      // Connected
-      else if (Math.abs(card1.value - card2.value) === 1) {
-        strength += 0.05
-      }
+
+      const highCard = Math.max(card1.value, card2.value)
+      const suited = card1.suit === card2.suit
+      const connected = Math.abs(card1.value - card2.value) === 1
+
+      let strength = highCard / 20
+      if (suited) strength += 0.1
+      if (connected) strength += 0.05
+      return Math.min(0.6, strength)
     }
 
-    return Math.min(strength, 1.0)
+    const bestHand = evaluateBestHand(allCards)
+
+    const rankStrength = {
+      9: 0.95,
+      8: 0.9,
+      7: 0.8,
+      6: 0.7,
+      5: 0.6,
+      4: 0.5,
+      3: 0.4,
+      2: 0.3,
+      1: 0.2
+    }
+
+    return rankStrength[bestHand.rank] || 0.3
   }
 
-  // Get player position (early/middle/late)
   getPlayerPosition(player) {
-    const playerIndex = this.players.findIndex(p => p.id === player.id)
-    const positionFromDealer = (playerIndex - this.dealerIndex + this.players.length) % this.players.length
-    const activePlayers = this.players.filter(p => p.active && !p.folded).length
+    const index = this.players.findIndex((p) => p.id === player.id)
+    if (index === -1) {
+      return 'early'
+    }
 
-    if (positionFromDealer <= activePlayers / 3) return 'early'
-    if (positionFromDealer <= activePlayers * 2 / 3) return 'middle'
+    const activeOrder = []
+    for (let i = 0; i < this.players.length; i++) {
+      const idx = (this.dealerIndex + i + 1) % this.players.length
+      const candidate = this.players[idx]
+      if (candidate.active && !candidate.folded) {
+        activeOrder.push(candidate.id)
+      }
+    }
+
+    const positionIndex = activeOrder.indexOf(player.id)
+    if (positionIndex === -1) {
+      return 'early'
+    }
+
+    if (positionIndex <= Math.floor(activeOrder.length / 3)) {
+      return 'early'
+    }
+
+    if (positionIndex <= Math.floor((activeOrder.length * 2) / 3)) {
+      return 'middle'
+    }
+
     return 'late'
   }
 
-  // Process AI action
   processAIAction() {
     if (this.currentPlayerIndex === -1 || this.gameFinished) {
       return null
     }
-    
-    const currentPlayer = this.players[this.currentPlayerIndex]
-    if (!currentPlayer || !currentPlayer.isAI || currentPlayer.folded || !currentPlayer.active) {
+
+    const player = this.players[this.currentPlayerIndex]
+    if (!player || !player.isAI || player.folded || !player.active || player.allIn) {
       return null
     }
-    
-    console.log(`AI ${currentPlayer.name} starting action, current bet: ${this.currentBet}, player bet: ${currentPlayer.currentBet}`)
 
-    const aiDecision = this.getAIAction(currentPlayer)
-    console.log(`AI decision: ${aiDecision.action}, amount: ${aiDecision.amount || 0}`)
-    
-    const result = this.handlePlayerAction(currentPlayer.id, aiDecision.action, aiDecision.amount)
-    
-    if (result.success) {
-      console.log(`AI action successful: ${aiDecision.action}`)
+    const decision = this.getAIAction(player)
+
+    const actionType = decision.action
+    const amount = decision.amount ?? 0
+
+    const result = this.handlePlayerAction(player.id, actionType, amount)
+    if (!result.success) {
+      player.folded = true
+      player.lastAction = {
+        action: 'fold',
+        type: 'fold',
+        playerId: player.id,
+        playerName: player.name,
+        amount: 0,
+        phase: this.phase,
+        timestamp: Date.now()
+      }
+      this.lastAction = player.lastAction
+      this.actionHistory.push(player.lastAction)
+      if (!this.gameFinished) {
+        this.nextPlayer()
+      }
       return {
-        playerId: currentPlayer.id,
-        playerName: currentPlayer.name,
-        action: aiDecision.action,
-        amount: result.amount || aiDecision.amount || 0,
+        playerId: player.id,
+        playerName: player.name,
+        actionSummary: player.lastAction,
         gameState: this.getGameState()
       }
-    } else {
-      console.log(`AI action failed: ${result.error}`)
     }
-    
-    return null
-  }
 
-  // Fold
-  handleFold(player) {
-    player.folded = true
-    return { 
-      success: true, 
-      action: { type: 'fold', player: player.name }
+    return {
+      playerId: player.id,
+      playerName: player.name,
+      actionSummary: result.action,
+      gameState: this.getGameState()
     }
   }
 
-  // Check
-  handleCheck(player) {
-    if (this.currentBet > player.currentBet) {
-      return { success: false, error: 'Cannot check, there is a current bet' }
-    }
-    
-    return { 
-      success: true, 
-      action: { type: 'check', player: player.name }
-    }
-  }
-
-  // Call
-  handleCall(player) {
-    const callAmount = this.currentBet - player.currentBet
-    if (callAmount <= 0) {
-      return this.handleCheck(player)
-    }
-
-    const actualAmount = Math.min(callAmount, player.chips)
-    this.playerBet(player, actualAmount)
-    
-    return { 
-      success: true, 
-      amount: actualAmount,
-      action: { type: 'call', player: player.name, amount: actualAmount }
-    }
-  }
-
-  // Bet/Raise
-  handleBet(player, amount) {
-    const minBet = this.currentBet > 0 ? this.currentBet * 2 : this.bigBlind
-    const maxBet = player.chips
-    
-    if (amount < minBet && amount < maxBet) {
-      return { success: false, error: `Minimum bet amount is ${minBet}` }
-    }
-
-    if (amount > maxBet) {
-      amount = maxBet
-    }
-
-    const totalBet = player.currentBet + amount
-    this.playerBet(player, amount)
-    this.currentBet = Math.max(this.currentBet, totalBet)
-    
-    return { 
-      success: true, 
-      amount,
-      action: { type: 'bet', player: player.name, amount }
-    }
-  }
-
-  // All-in
-  handleAllIn(player) {
-    const amount = player.chips
-    this.playerBet(player, amount)
-    player.allIn = true
-    
-    const totalBet = player.currentBet
-    this.currentBet = Math.max(this.currentBet, totalBet)
-    
-    return { 
-      success: true, 
-      amount,
-      action: { type: 'all_in', player: player.name, amount }
-    }
-  }
-
-  // Player bet
-  playerBet(player, amount) {
-    const actualAmount = Math.min(amount, player.chips)
-    player.chips -= actualAmount
-    player.currentBet += actualAmount
-    player.totalBet += actualAmount
-    this.pot += actualAmount
-
-    if (player.chips === 0) {
-      player.allIn = true
-    }
-  }
-
-  // Next player
-  nextPlayer() {
-    this.currentPlayerIndex = this.getNextActivePlayer(this.currentPlayerIndex + 1)
-  }
-
-  // Get next active player
-  getNextActivePlayer(startIndex) {
-    for (let i = 0; i < this.players.length; i++) {
-      const index = (startIndex + i) % this.players.length
-      const player = this.players[index]
-      if (player.active && !player.folded && !player.allIn) {
-        return index
-      }
-    }
-    return -1
-  }
-
-  // Check if round is complete
-  isRoundComplete() {
-    const activePlayers = this.players.filter(p => p.active && !p.folded)
-    
-    if (activePlayers.length <= 1) {
+  isGameFinished() {
+    if (this.gameFinished) {
       return true
     }
 
-    // Check if all active players have bet the same amount or are all-in
-    const nonAllInPlayers = activePlayers.filter(p => !p.allIn)
-    if (nonAllInPlayers.length === 0) {
-      return true
-    }
+    const activePlayers = this.players.filter((player) => player.active && !player.folded)
 
-    const currentBetAmount = this.currentBet
-    return nonAllInPlayers.every(p => p.currentBet === currentBetAmount)
-  }
-
-  // Move to next phase
-  nextPhase() {
-    // Reset player current bets
-    this.players.forEach(player => {
-      player.currentBet = 0
-    })
-    this.currentBet = 0
-
-    switch (this.phase) {
-      case 'preflop':
-        this.phase = 'flop'
-        this.dealFlop()
-        break
-      case 'flop':
-        this.phase = 'turn'
-        this.dealTurn()
-        break
-      case 'turn':
-        this.phase = 'river'
-        this.dealRiver()
-        break
-      case 'river':
-        this.phase = 'showdown'
-        this.showdown()
-        return
-    }
-
-    // Set first action player for next round (first active player after dealer)
-    this.currentPlayerIndex = this.getNextActivePlayer(this.dealerIndex + 1)
-  }
-
-  // Deal flop
-  dealFlop() {
-    this.deck.deal() // Burn one card
-    for (let i = 0; i < 3; i++) {
-      this.communityCards.push(this.deck.deal())
-    }
-  }
-
-  // Deal turn
-  dealTurn() {
-    this.deck.deal() // Burn one card
-    this.communityCards.push(this.deck.deal())
-  }
-
-  // Deal river
-  dealRiver() {
-    this.deck.deal() // Burn one card
-    this.communityCards.push(this.deck.deal())
-  }
-
-  // Showdown
-  showdown() {
-    const activePlayers = this.players.filter(p => p.active && !p.folded)
-
-    if (activePlayers.length === 1) {
-      // Only one player left, they win directly
-      const winner = activePlayers[0]
-      winner.chips += this.pot
+    if (this.gameStarted && activePlayers.length <= 1) {
       this.gameFinished = true
-      return
-    }
-
-    // Evaluate all players' hands
-    activePlayers.forEach(player => {
-      player.handRank = this.evaluateHand(player.cards.concat(this.communityCards))
-    })
-
-    // Determine winner
-    activePlayers.sort((a, b) => this.compareHands(b.handRank, a.handRank))
-    const winner = activePlayers[0]
-
-    // Distribute pot
-    winner.chips += this.pot
-    this.gameFinished = true
-  }
-
-  // Evaluate hand strength (simplified version)
-  evaluateHand(cards) {
-    // This is a simplified hand evaluation, more complex algorithms needed in production
-    // Higher return value means stronger hand
-    const values = cards.map(c => c.value).sort((a, b) => b - a)
-
-    // Check for flush
-    const suits = cards.map(c => c.suit)
-    const isFlush = suits.some(suit => suits.filter(s => s === suit).length >= 5)
-
-    // Check for straight
-    const isStraight = this.checkStraight(values)
-
-    // Check for pairs, three of a kind, etc.
-    const counts = this.countValues(values)
-    const countValues = Object.values(counts).sort((a, b) => b - a)
-
-    if (isFlush && isStraight) return { rank: 9, values } // Straight flush
-    if (countValues[0] === 4) return { rank: 8, values } // Four of a kind
-    if (countValues[0] === 3 && countValues[1] === 2) return { rank: 7, values } // Full house
-    if (isFlush) return { rank: 6, values } // Flush
-    if (isStraight) return { rank: 5, values } // Straight
-    if (countValues[0] === 3) return { rank: 4, values } // Three of a kind
-    if (countValues[0] === 2 && countValues[1] === 2) return { rank: 3, values } // Two pair
-    if (countValues[0] === 2) return { rank: 2, values } // One pair
-
-    return { rank: 1, values } // High card
-  }
-
-  checkStraight(values) {
-    const uniqueValues = [...new Set(values)].sort((a, b) => b - a)
-
-    for (let i = 0; i <= uniqueValues.length - 5; i++) {
-      let consecutive = 1
-      for (let j = i; j < uniqueValues.length - 1 && consecutive < 5; j++) {
-        if (uniqueValues[j] - 1 === uniqueValues[j + 1]) {
-          consecutive += 1
-        } else if (uniqueValues[j] !== uniqueValues[j + 1]) {
-          break
-        }
-      }
-
-      if (consecutive >= 5) {
-        return true
-      }
-    }
-
-    if (uniqueValues.includes(14)) {
-      const wheel = [5, 4, 3, 2]
-      if (wheel.every(value => uniqueValues.includes(value))) {
-        return true
-      }
+      return true
     }
 
     return false
   }
 
-  countValues(values) {
-    return values.reduce((acc, value) => {
-      acc[value] = (acc[value] || 0) + 1
-      return acc
-    }, {})
+  getGameResults() {
+    if (!this.gameFinished) {
+      return null
+    }
+
+    return this.latestResults
   }
 
-  compareHands(hand1, hand2) {
-    if (hand1.rank !== hand2.rank) {
-      return hand1.rank - hand2.rank
-    }
-    
-    // If hand ranks are the same, compare specific values
-    for (let i = 0; i < Math.min(hand1.values.length, hand2.values.length); i++) {
-      if (hand1.values[i] !== hand2.values[i]) {
-        return hand1.values[i] - hand2.values[i]
-      }
-    }
-    
-    return 0
+  evaluateHand(cards) {
+    return evaluateBestHand(cards)
   }
 
-  // Get game state
   getGameState() {
     return {
       roomId: this.roomId,
       phase: this.phase,
       pot: this.pot,
       currentBet: this.currentBet,
+      minRaise: this.minimumRaiseAmount,
       currentPlayerIndex: this.currentPlayerIndex,
       dealerIndex: this.dealerIndex,
-      communityCards: this.communityCards.map(card => ({
+      communityCards: this.communityCards.map((card) => ({
         suit: card.suit,
         rank: card.rank,
         revealed: true
       })),
-      players: this.players.map(player => ({
-        id: player.id,
-        name: player.name,
-        chips: player.chips,
-        currentBet: player.currentBet,
-        folded: player.folded,
-        allIn: player.allIn,
-        active: player.active,
-        isAI: player.isAI || false,
-        cards: player.cards.map(card => ({
-          suit: card.suit,
-          rank: card.rank
-        }))
-      })),
+      players: this.players.map((player) => getPlayerSnapshot(player, this.phase)),
       desiredSeatCount: this.desiredSeatCount,
       gameStarted: this.gameStarted,
-      gameFinished: this.gameFinished
+      gameFinished: this.gameFinished,
+      lastAction: this.lastAction
     }
   }
 
-  // Get player list
   getPlayers() {
-    return this.players.map(player => ({
+    return this.players.map((player) => ({
       id: player.id,
       name: player.name,
       chips: player.chips,
@@ -872,66 +1376,7 @@ export class PokerGame {
     }))
   }
 
-  // 获取玩家数量
   getPlayerCount() {
     return this.players.length
-  }
-
-  // Check if game is finished
-  isGameFinished() {
-    if (this.gameFinished) {
-      return true
-    }
-
-    const activePlayers = this.players.filter(player => player.active && !player.folded)
-
-    if (activePlayers.length <= 1 && this.gameStarted) {
-      this.gameFinished = true
-      return true
-    }
-
-    return false
-  }
-
-  // Get game results
-  getGameResults() {
-    if (!this.gameFinished) return null
-
-    const activePlayers = this.players.filter(p => p.active && !p.folded)
-    let winner = null
-
-    if (activePlayers.length === 1) {
-      winner = activePlayers[0]
-    } else {
-      // Find player with strongest hand
-      activePlayers.forEach(player => {
-        if (!player.handRank) {
-          player.handRank = this.evaluateHand(player.cards.concat(this.communityCards))
-        }
-      })
-      
-      activePlayers.sort((a, b) => this.compareHands(b.handRank, a.handRank))
-      winner = activePlayers[0]
-    }
-
-    const winnerInfo = {
-      id: winner.id,
-      name: winner.name,
-      chips: winner.chips
-    }
-
-    return {
-      winner: winnerInfo,
-      winners: [winnerInfo],
-      pot: this.pot,
-      players: this.players.map(player => ({
-        id: player.id,
-        name: player.name,
-        finalChips: player.chips,
-        chipsChange: player.chips - (player.initialChips || 0),
-        folded: player.folded,
-        isAI: player.isAI || false
-      }))
-    }
   }
 }
