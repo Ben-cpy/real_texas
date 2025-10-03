@@ -1,17 +1,24 @@
 ﻿<template>
   <div class="game-screen" :class="[`phase-${gameStore.gamePhase}`]">
     <header class="top-bar">
-      <div class="room-info">
-        <h1>Texas Hold'em</h1>
-        <div class="meta-row">
-          <span class="meta-pill">Room {{ displayRoomId }}</span>
-          <span class="meta-pill">Blinds ${{ gameStore.smallBlind }}/{{ gameStore.bigBlind }}</span>
-          <span class="meta-pill">{{ gameStore.players.length }} / {{ maxSeatLimit }} players</span>
+      <div class="top-bar-left">
+        <div class="room-info">
+          <h1>Texas Hold'em</h1>
+          <div class="meta-row">
+            <span class="meta-pill">Room {{ displayRoomId }}</span>
+            <span class="meta-pill">Blinds ${{ gameStore.smallBlind }}/{{ gameStore.bigBlind }}</span>
+            <span class="meta-pill">{{ gameStore.players.length }} / {{ maxSeatLimit }} players</span>
+          </div>
+          <div class="meta-row secondary">
+            <span class="meta-pill">Dealer: {{ dealerName }}</span>
+            <span class="meta-pill">Phase: {{ phaseLabel }}</span>
+            <span class="meta-pill" v-if="gameStore.currentBet > 0">Current bet ${{ gameStore.currentBet }}</span>
+          </div>
         </div>
-        <div class="meta-row secondary">
-          <span class="meta-pill">Dealer: {{ dealerName }}</span>
-          <span class="meta-pill">Phase: {{ phaseLabel }}</span>
-          <span class="meta-pill" v-if="gameStore.currentBet > 0">Current bet ${{ gameStore.currentBet }}</span>
+        <div class="pot-info" aria-live="polite">
+          <span class="label">Pot</span>
+          <span class="value">${{ gameStore.totalPot }}</span>
+          <span class="call" v-if="callAmount > 0">To call ${{ callAmount }}</span>
         </div>
       </div>
 
@@ -30,7 +37,6 @@
       <div class="account-panel">
         <div class="account-name">
           <span>{{ userStore.username }}</span>
-          <small>ID: {{ userStore.user?.id || '?' }}</small>
         </div>
         <div class="account-chips">${{ formattedChips }}</div>
         <div class="account-stats">
@@ -180,14 +186,6 @@
 
     <main class="content">
       <section class="table-area">
-        <div class="table-summary">
-          <div class="pot-info" aria-live="polite">
-            <span class="label">Pot</span>
-            <span class="value">${{ gameStore.totalPot }}</span>
-            <span class="call" v-if="callAmount > 0">To call ${{ callAmount }}</span>
-          </div>
-        </div>
-
         <div class="table-felt">
           <div class="table-glow"></div>
 
@@ -341,62 +339,56 @@
                     <div v-else class="card-back large"></div>
                   </div>
                 </div>
-                <div class="panel-status">
-                  <div
-                    class="status-line"
-                    :class="getActionClass(myPlayer.lastAction)"
-                    v-if="myPlayer.lastAction"
-                  >
-                    {{ formatPlayerAction(myPlayer.lastAction) }}
+                <div class="panel-controls" :class="{ inactive: !gameStore.isMyTurn }">
+                  <div class="action-buttons">
+                    <button class="btn ghost" @click="fold" :disabled="!gameStore.isMyTurn">Fold</button>
+                    <button class="btn ghost" @click="checkOrCall" :disabled="!gameStore.isMyTurn">
+                      {{ canCheck ? 'Check' : `Call $${callAmount}` }}
+                    </button>
+                    <button class="btn primary" @click="openRaisePanel" :disabled="!canRaise">
+                      Raise
+                    </button>
+                    <button class="btn danger" @click="allIn" :disabled="!gameStore.isMyTurn">All-in</button>
                   </div>
-                  <div class="status-line" v-else>
-                    Waiting for action
-                  </div>
-                  <div class="status-line" v-if="myPlayer.bestHand && myPlayer.bestHand.rankName">
-                    Best hand: {{ myPlayer.bestHand.rankName }}
+                  <transition name="raise-panel">
+                    <div v-if="showRaisePanel" class="raise-panel">
+                      <header>
+                        <span>Raise Amount</span>
+                        <button class="icon-btn" @click="closeRaisePanel">✕</button>
+                      </header>
+                      <div class="slider-row">
+                        <input
+                          type="range"
+                          :min="Math.min(minRaiseValue, maxRaiseValue)"
+                          :max="maxRaiseValue"
+                          :step="RAISE_STEP"
+                          v-model.number="raiseAmount"
+                        />
+                        <div class="slider-value">${{ raiseAmount }}</div>
+                      </div>
+                      <div class="quick-raise">
+                        <button class="btn light" @click="setRaiseFraction(0.25)">+25%</button>
+                        <button class="btn light" @click="setRaiseFraction(0.5)">+50%</button>
+                        <button class="btn light" @click="setRaiseFraction(1)">Pot</button>
+                        <button class="btn light" @click="setRaiseAllIn">All-in</button>
+                      </div>
+                      <button class="btn primary full" @click="confirmRaise">Confirm Raise</button>
+                    </div>
+                  </transition>
+                  <div class="panel-status">
+                    <div class="status-line" v-if="myPlayer.lastAction">
+                      {{ formatPlayerAction(myPlayer.lastAction) }}
+                    </div>
+                    <div class="status-line" v-else>
+                      Waiting for action
+                    </div>
+                    <div class="status-line" v-if="myPlayer.bestHand && myPlayer.bestHand.rankName">
+                      Best hand: {{ myPlayer.bestHand.rankName }}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-            <section class="player-actions" :class="{ inactive: !gameStore.isMyTurn }">
-              <h3>Actions</h3>
-              <div class="action-buttons">
-                <button class="btn ghost" @click="fold" :disabled="!gameStore.isMyTurn">Fold</button>
-                <button class="btn ghost" @click="checkOrCall" :disabled="!gameStore.isMyTurn">
-                  {{ canCheck ? 'Check' : `Call $${callAmount}` }}
-                </button>
-                <button class="btn primary" @click="openRaisePanel" :disabled="!canRaise">
-                  Raise
-                </button>
-                <button class="btn danger" @click="allIn" :disabled="!gameStore.isMyTurn">All-in</button>
-              </div>
-
-              <transition name="raise-panel">
-                <div v-if="showRaisePanel" class="raise-panel">
-                  <header>
-                    <span>Raise Amount</span>
-                    <button class="icon-btn" @click="closeRaisePanel">✕</button>
-                  </header>
-                  <div class="slider-row">
-                    <input
-                      type="range"
-                      :min="Math.min(minRaiseValue, maxRaiseValue)"
-                      :max="maxRaiseValue"
-                      :step="RAISE_STEP"
-                      v-model.number="raiseAmount"
-                    />
-                    <div class="slider-value">${{ raiseAmount }}</div>
-                  </div>
-                  <div class="quick-raise">
-                    <button class="btn light" @click="setRaiseFraction(0.25)">+25%</button>
-                    <button class="btn light" @click="setRaiseFraction(0.5)">+50%</button>
-                    <button class="btn light" @click="setRaiseFraction(1)">Pot</button>
-                    <button class="btn light" @click="setRaiseAllIn">All-in</button>
-                  </div>
-                  <button class="btn primary full" @click="confirmRaise">Confirm Raise</button>
-                </div>
-              </transition>
-            </section>
           </div>
         </div>
       </section>
@@ -1346,6 +1338,13 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(16px);
 }
 
+.top-bar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex: 1;
+}
+
 .room-info h1 {
   margin: 0;
   font-size: 1.75rem;
@@ -1392,19 +1391,13 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 16px;
   min-width: 220px;
+  align-items: center;
+  text-align: center;
 }
 
 .account-name {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   font-weight: 600;
   font-size: 1rem;
-}
-
-.account-name small {
-  color: rgba(148, 163, 184, 0.7);
-  font-weight: 500;
 }
 
 .account-chips {
@@ -1582,13 +1575,6 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
-.table-summary {
-  width: 100%;
-  max-width: 1080px;
-  display: flex;
-  justify-content: center;
-}
-
 .table-felt {
   position: relative;
   width: 100%;
@@ -1636,6 +1622,19 @@ onBeforeUnmount(() => {
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45);
   color: #e2e8f0;
   z-index: 2;
+}
+
+.top-bar .pot-info {
+  align-self: flex-start;
+  align-items: flex-start;
+  text-align: left;
+  min-width: 0;
+  padding: 0.6rem 1.1rem;
+  background: rgba(30, 41, 59, 0.68);
+}
+
+.top-bar .pot-info .value {
+  font-size: 1.2rem;
 }
 
 .round-chip {
@@ -2182,8 +2181,9 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.player-panel,
-.player-actions {
+.player-panel {
+  flex: 1 1 420px;
+  min-width: 320px;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -2192,26 +2192,6 @@ onBeforeUnmount(() => {
   border-radius: 20px;
   border: 1px solid rgba(148, 163, 184, 0.3);
   box-shadow: 0 24px 45px rgba(15, 23, 42, 0.48);
-}
-
-.player-panel {
-  flex: 1 1 420px;
-  min-width: 320px;
-}
-
-.player-actions {
-  flex: 1 1 320px;
-  min-width: 280px;
-  gap: 1.2rem;
-  justify-content: flex-end;
-}
-
-.player-actions h3 {
-  margin: 0;
-}
-
-.player-actions.inactive {
-  opacity: 0.55;
 }
 
 .panel-header {
@@ -2292,13 +2272,31 @@ onBeforeUnmount(() => {
 .panel-body {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: stretch;
   gap: 1.5rem;
+}
+
+.panel-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: stretch;
+  min-width: 260px;
+  flex: 1 1 260px;
+}
+
+.panel-controls.inactive {
+  opacity: 0.6;
+}
+
+.panel-controls .action-buttons {
+  width: 100%;
 }
 
 .panel-cards {
   display: flex;
   gap: 0.9rem;
+  flex-shrink: 0;
 }
 
 .player-card {
