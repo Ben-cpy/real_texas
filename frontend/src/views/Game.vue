@@ -28,10 +28,7 @@
       </div>
 
       <div class="account-panel">
-        <div class="account-name">
-          <span>{{ userStore.username }}</span>
-          <small>ID: {{ userStore.user?.id || '?' }}</small>
-        </div>
+        <div class="account-name">{{ userStore.username }}</div>
         <div class="account-chips">${{ formattedChips }}</div>
         <div class="account-stats">
           <span>Games {{ userStore.gamesPlayed }}</span>
@@ -180,14 +177,6 @@
 
     <main class="content">
       <section class="table-area">
-        <div class="table-summary">
-          <div class="pot-info" aria-live="polite">
-            <span class="label">Pot</span>
-            <span class="value">${{ gameStore.totalPot }}</span>
-            <span class="call" v-if="callAmount > 0">To call ${{ callAmount }}</span>
-          </div>
-        </div>
-
         <div class="table-felt">
           <div class="table-glow"></div>
 
@@ -306,9 +295,13 @@
                   <span class="label">You</span>
                   <h3>{{ myPlayer.name }}</h3>
                 </div>
+                <div class="pot-info-compact" aria-live="polite">
+                  <span class="label">POT</span>
+                  <span class="value">${{ gameStore.totalPot }}</span>
+                </div>
+                <span v-if="myPlayer.currentBet > 0" class="bet-indicator">In pot ${{ myPlayer.currentBet }}</span>
                 <div class="chip-summary">
                   <span class="stack">Stack ${{ myPlayer.chips }}</span>
-                  <span v-if="myPlayer.currentBet > 0" class="bet">In pot ${{ myPlayer.currentBet }}</span>
                   <span
                     v-if="gameStore.isMyTurn && callAmount > 0"
                     class="call-highlight"
@@ -324,53 +317,36 @@
                 </div>
               </div>
               <div class="panel-body">
-                <div class="panel-cards">
-                  <div
-                    v-for="n in 2"
-                    :key="`panel-card-${n}`"
-                    class="player-card"
-                    :class="{ revealed: shouldRevealPlayerCard(myPlayer, n - 1) }"
-                  >
+                <div class="panel-cards-row">
+                  <div class="cards-wrapper">
                     <div
-                      v-if="shouldRevealPlayerCard(myPlayer, n - 1)"
-                      class="card-face large"
-                      :class="getCardColor(myPlayer.cards[n - 1]?.suit)"
+                      v-for="n in 2"
+                      :key="`panel-card-${n}`"
+                      class="player-card"
+                      :class="{ revealed: shouldRevealPlayerCard(myPlayer, n - 1) }"
                     >
-                      {{ myPlayer.cards[n - 1]?.suit }}{{ myPlayer.cards[n - 1]?.rank }}
+                      <div
+                        v-if="shouldRevealPlayerCard(myPlayer, n - 1)"
+                        class="card-face large"
+                        :class="getCardColor(myPlayer.cards[n - 1]?.suit)"
+                      >
+                        {{ myPlayer.cards[n - 1]?.suit }}{{ myPlayer.cards[n - 1]?.rank }}
+                      </div>
+                      <div v-else class="card-back large"></div>
                     </div>
-                    <div v-else class="card-back large"></div>
                   </div>
-                </div>
-                <div class="panel-status">
-                  <div
-                    class="status-line"
-                    :class="getActionClass(myPlayer.lastAction)"
-                    v-if="myPlayer.lastAction"
-                  >
-                    {{ formatPlayerAction(myPlayer.lastAction) }}
-                  </div>
-                  <div class="status-line" v-else>
-                    Waiting for action
-                  </div>
-                  <div class="status-line" v-if="myPlayer.bestHand && myPlayer.bestHand.rankName">
-                    Best hand: {{ myPlayer.bestHand.rankName }}
+                  <div class="panel-actions" :class="{ inactive: !gameStore.isMyTurn }">
+                    <button class="btn ghost" @click="fold" :disabled="!gameStore.isMyTurn">Fold</button>
+                    <button class="btn ghost" @click="checkOrCall" :disabled="!gameStore.isMyTurn">
+                      {{ canCheck ? 'Check' : `Call $${callAmount}` }}
+                    </button>
+                    <button class="btn primary" @click="openRaisePanel" :disabled="!canRaise">
+                      Raise
+                    </button>
+                    <button class="btn danger" @click="allIn" :disabled="!gameStore.isMyTurn">All-in</button>
                   </div>
                 </div>
               </div>
-            </div>
-            <section class="player-actions" :class="{ inactive: !gameStore.isMyTurn }">
-              <h3>Actions</h3>
-              <div class="action-buttons">
-                <button class="btn ghost" @click="fold" :disabled="!gameStore.isMyTurn">Fold</button>
-                <button class="btn ghost" @click="checkOrCall" :disabled="!gameStore.isMyTurn">
-                  {{ canCheck ? 'Check' : `Call $${callAmount}` }}
-                </button>
-                <button class="btn primary" @click="openRaisePanel" :disabled="!canRaise">
-                  Raise
-                </button>
-                <button class="btn danger" @click="allIn" :disabled="!gameStore.isMyTurn">All-in</button>
-              </div>
-
               <transition name="raise-panel">
                 <div v-if="showRaisePanel" class="raise-panel">
                   <header>
@@ -396,7 +372,7 @@
                   <button class="btn primary full" @click="confirmRaise">Confirm Raise</button>
                 </div>
               </transition>
-            </section>
+            </div>
           </div>
         </div>
       </section>
@@ -1395,16 +1371,9 @@ onBeforeUnmount(() => {
 }
 
 .account-name {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  text-align: center;
   font-weight: 600;
   font-size: 1rem;
-}
-
-.account-name small {
-  color: rgba(148, 163, 184, 0.7);
-  font-weight: 500;
 }
 
 .account-chips {
@@ -1582,17 +1551,10 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
-.table-summary {
-  width: 100%;
-  max-width: 1080px;
-  display: flex;
-  justify-content: center;
-}
-
 .table-felt {
   position: relative;
   width: 100%;
-  max-width: 1080px;
+  max-width: 1320px;
   aspect-ratio: 16 / 9;
   border-radius: 220px;
   background: radial-gradient(circle at center, rgba(30, 64, 175, 0.18), rgba(15, 23, 42, 0.92));
@@ -1622,20 +1584,18 @@ onBeforeUnmount(() => {
 }
 
 .pot-info {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   gap: 0.35rem;
-  padding: 0.7rem 1.4rem;
-  min-width: 210px;
-  background: rgba(15, 23, 42, 0.78);
+  padding: 0.75rem 1rem;
+  min-width: 180px;
+  background: rgba(30, 41, 59, 0.65);
   border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.2);
   color: #e2e8f0;
-  z-index: 2;
+  align-self: flex-end;
 }
 
 .round-chip {
@@ -2012,15 +1972,13 @@ onBeforeUnmount(() => {
 .table-footer {
   width: 100%;
   max-width: 1080px;
-  align-self: flex-start;
+  align-self: center;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: 1.5rem;
   margin-top: 1.75rem;
-  margin-left: 0;
-  margin-right: auto;
 }
 
 .player-footer-row {
@@ -2028,9 +1986,8 @@ onBeforeUnmount(() => {
   max-width: 100%;
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
-  justify-content: flex-start;
-  align-items: flex-end;
+  justify-content: center;
+  align-items: center;
 }
 
 .showdown-overlay {
@@ -2182,8 +2139,7 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.player-panel,
-.player-actions {
+.player-panel {
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -2192,32 +2148,14 @@ onBeforeUnmount(() => {
   border-radius: 20px;
   border: 1px solid rgba(148, 163, 184, 0.3);
   box-shadow: 0 24px 45px rgba(15, 23, 42, 0.48);
-}
-
-.player-panel {
-  flex: 1 1 420px;
-  min-width: 320px;
-}
-
-.player-actions {
-  flex: 1 1 320px;
-  min-width: 280px;
-  gap: 1.2rem;
-  justify-content: flex-end;
-}
-
-.player-actions h3 {
-  margin: 0;
-}
-
-.player-actions.inactive {
-  opacity: 0.55;
+  width: 100%;
+  max-width: 900px;
 }
 
 .panel-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 1.2rem;
 }
 
@@ -2242,11 +2180,47 @@ onBeforeUnmount(() => {
   color: #f8fafc;
 }
 
+.pot-info-compact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.8rem;
+  background: rgba(30, 41, 59, 0.65);
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.pot-info-compact .label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(226, 232, 240, 0.75);
+}
+
+.pot-info-compact .value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #facc15;
+}
+
+.bet-indicator {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(244, 114, 182, 0.15);
+  border: 1px solid rgba(244, 114, 182, 0.3);
+  color: rgba(244, 114, 182, 0.95);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .chip-summary {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  align-items: flex-end;
+  align-items: center;
   font-size: 0.85rem;
   color: rgba(226, 232, 240, 0.9);
 }
@@ -2280,6 +2254,8 @@ onBeforeUnmount(() => {
   background: rgba(56, 189, 248, 0.15);
   color: #38bdf8;
   font-size: 0.78rem;
+  align-self: flex-start;
+  margin-right: 1.5rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -2291,14 +2267,21 @@ onBeforeUnmount(() => {
 
 .panel-body {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1.5rem;
+  flex-direction: column;
+  gap: 1.2rem;
 }
 
-.panel-cards {
+.panel-cards-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+}
+
+.cards-wrapper {
   display: flex;
   gap: 0.9rem;
+  flex-shrink: 0;
 }
 
 .player-card {
@@ -2366,19 +2349,22 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 0 12px rgba(15, 23, 42, 0.4);
 }
 
-.panel-status {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  min-width: 160px;
-  font-size: 0.85rem;
-  color: rgba(226, 232, 240, 0.85);
+.panel-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem;
+  max-width: 320px;
 }
 
-.status-line {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
+.panel-actions.inactive {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.panel-actions .btn {
+  min-width: 140px;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.85rem;
 }
 
 .host-controls {
