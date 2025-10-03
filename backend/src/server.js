@@ -82,21 +82,29 @@ app.use('*', (req, res) => {
 })
 
 // 优雅关闭
-process.on('SIGTERM', () => {
-  console.log('收到SIGTERM信号，正在关闭服务器...')
-  server.close(() => {
-    console.log('服务器已关闭')
-    process.exit(0)
-  })
-})
+const gracefulShutdown = (signal) => {
+  console.log(`收到 ${signal} 信号，正在优雅地关闭服务器...`);
 
-process.on('SIGINT', () => {
-  console.log('收到SIGINT信号，正在关闭服务器...')
-  server.close(() => {
-    console.log('服务器已关闭')
-    process.exit(0)
-  })
-})
+  // 首先关闭 Socket.IO 服务器，这将断开所有连接的客户端
+  io.close(() => {
+    console.log('Socket.IO 服务器已关闭。');
+
+    // 然后关闭 HTTP 服务器
+    server.close(() => {
+      console.log('HTTP 服务器已关闭。');
+      process.exit(0);
+    });
+  });
+
+  // 添加一个超时以强制退出，以防万一
+  setTimeout(() => {
+    console.error('无法在10秒内完成关闭，强制退出。');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Start server with port management
 async function startServer() {
