@@ -231,6 +231,11 @@
                 <span class="indicator-text">Acting</span>
               </div>
               <div class="seat-frame">
+                <!-- Player Avatar with Poker Chip Frame -->
+                <div class="player-avatar">
+                  <img src="/poke.svg" alt="" class="avatar-chip" />
+                </div>
+
                 <div v-if="seat.player.folded" class="fold-badge" aria-hidden="true">
                   <span class="fold-icon">⛔</span>
                   <span class="fold-text">Fold</span>
@@ -1297,6 +1302,7 @@ onBeforeUnmount(() => {
 
 .game-screen {
   min-height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -1307,6 +1313,7 @@ onBeforeUnmount(() => {
     rgba(15, 23, 42, 0.93);
   color: #f8fafc;
   font-family: 'Inter', 'Segoe UI', sans-serif;
+  overflow-y: auto;
 }
 
 .top-bar {
@@ -1540,6 +1547,7 @@ onBeforeUnmount(() => {
   flex: 1;
   display: flex;
   gap: 1.5rem;
+  min-height: 0;
 }
 
 
@@ -1549,6 +1557,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 1rem;
   align-items: center;
+  min-height: 0;
 }
 
 .table-felt {
@@ -1765,11 +1774,12 @@ onBeforeUnmount(() => {
   background: rgba(15, 23, 42, 0.65);
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 18px;
-  padding: 0.65rem 0.75rem;
+  padding: 0.75rem 0.85rem 0.65rem;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
   box-shadow: 0 12px 25px rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(8px);
 }
 
 .seat.human-player .seat-frame {
@@ -1793,6 +1803,55 @@ onBeforeUnmount(() => {
   background: rgba(79, 70, 229, 0.22);
   border-color: rgba(129, 140, 248, 0.35);
   box-shadow: 0 18px 32px rgba(79, 70, 229, 0.25);
+}
+
+/* Player Avatar with Poker Chip Frame */
+.player-avatar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.avatar-chip {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(250, 188, 61, 0.4));
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+.seat.active .avatar-chip {
+  transform: scale(1.1);
+  filter: drop-shadow(0 4px 12px rgba(250, 188, 61, 0.7));
+  animation: pulse-chip 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-chip {
+  0%, 100% {
+    transform: scale(1.1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+.seat.folded .avatar-chip {
+  opacity: 0.5;
+  filter: grayscale(0.6);
+}
+
+.seat.allin .avatar-chip {
+  animation: spin-chip 2s linear infinite;
+}
+
+@keyframes spin-chip {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .seat-header {
