@@ -1421,35 +1421,35 @@ onBeforeUnmount(() => {
 }
 
 .btn.primary {
-  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  background: #1F77B4;
   border-color: rgba(148, 163, 184, 0.25);
 }
 
 .btn.primary:hover:not(:disabled) {
-  box-shadow: 0 18px 35px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 18px 35px rgba(31, 119, 180, 0.4);
 }
 
 .btn.danger {
-  background: linear-gradient(135deg, #f97316, #ef4444);
+  background: #C00000;
   border-color: rgba(248, 113, 113, 0.45);
 }
 
 .btn.success {
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: #2CA02C;
   border-color: rgba(16, 185, 129, 0.45);
 }
 
 .btn.success:hover:not(:disabled) {
-  box-shadow: 0 18px 35px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 18px 35px rgba(44, 160, 44, 0.4);
 }
 
 .btn.warning {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+  background: #FF7F0E;
   border-color: rgba(245, 158, 11, 0.45);
 }
 
 .btn.warning:hover:not(:disabled) {
-  box-shadow: 0 18px 35px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 18px 35px rgba(255, 127, 14, 0.4);
 }
 
 .btn.ghost {
@@ -1687,11 +1687,11 @@ onBeforeUnmount(() => {
 }
 
 .card-face.red {
-  color: #dc2626;
+  color: #BC1E24;
 }
 
 .card-face.black {
-  color: #111827;
+  color: #211C1D;
 }
 
 .dealer-chip {
